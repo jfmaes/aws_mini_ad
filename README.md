@@ -43,3 +43,8 @@ The 3 domaincontrollers are:
 There is a bastion host that will provide an openvpn file to connect into the environment. This is the only entry point into the environment as non of the other systems are provisioned with a public IP address in AWS. 
 
 An overview of credentials can be found in the files directory of the dev folder. 
+
+
+If you liked the workshop, consider registering for SANS SEC565: Red Team Operations and Adversary Simulation 
+
+https://www.sans.org/cyber-security-courses/red-team-operations-adversary-emulation/
