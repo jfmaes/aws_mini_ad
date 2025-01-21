@@ -1,0 +1,3 @@
+domain_name: treasureisland.lab
+domain_short_name: treasure
+domain_admin_user: "{{ domain_short_name }}\\Administrator"

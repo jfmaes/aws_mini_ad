@@ -1,0 +1,430 @@
+ad_groups:
+- Sales
+- Engineering
+- HR
+- IT
+- Accounting
+- Domain Admins
+ous:
+- Sales
+- Engineering
+- HR
+- IT
+- Accounting
+users:
+- ad_groups:
+  - HR
+  email: megan.chang@pwnzone.lab
+  first_name: Megan
+  last_name: Chang
+  ou: HR
+  password: UJ3CoHxL5vTbE9v
+  username: mchang
+- ad_groups:
+  - Engineering
+  email: robert.green@pwnzone.lab
+  first_name: Robert
+  last_name: Green
+  ou: Engineering
+  password: yeRIKwCSIWtjcYo
+  username: rgreen
+- ad_groups:
+  - Sales
+  email: william.sullivan@pwnzone.lab
+  first_name: William
+  last_name: Sullivan
+  ou: Sales
+  password: KbVUeiNCCvMDHhl
+  username: wsullivan
+- ad_groups:
+  - HR
+  email: kristen.turner@pwnzone.lab
+  first_name: Kristen
+  last_name: Turner
+  ou: HR
+  password: 3sNvIILjClcYJxk
+  username: kturner
+- ad_groups:
+  - HR
+  email: thomas.silva@pwnzone.lab
+  first_name: Thomas
+  last_name: Silva
+  ou: HR
+  password: 3KKQIREaxpthGxn
+  username: tsilva
+- ad_groups:
+  - Accounting
+  email: rebecca.wagner@pwnzone.lab
+  first_name: Rebecca
+  last_name: Wagner
+  ou: Accounting
+  password: FD5Zz9T0IXXih3N
+  username: rwagner
+- ad_groups:
+  - Accounting
+  email: juan.campos@pwnzone.lab
+  first_name: Juan
+  last_name: Campos
+  ou: Accounting
+  password: ymn6SMrpmaGdtKa
+  username: jcampos
+- ad_groups:
+  - Engineering
+  email: christine.king@pwnzone.lab
+  first_name: Christine
+  last_name: King
+  ou: Engineering
+  password: bqlO3Gbcm1VOPHV
+  username: cking
+- ad_groups:
+  - Accounting
+  email: renee.mcgrath@pwnzone.lab
+  first_name: Renee
+  last_name: Mcgrath
+  ou: Accounting
+  password: 6fr6SPslEmcb7JX
+  username: rmcgrath
+- ad_groups:
+  - Accounting
+  email: lisa.barrera@pwnzone.lab
+  first_name: Lisa
+  last_name: Barrera
+  ou: Accounting
+  password: hQGsibC1CdxDlNd
+  username: lbarrera
+- ad_groups:
+  - IT
+  email: kyle.blair@pwnzone.lab
+  first_name: Kyle
+  last_name: Blair
+  ou: IT
+  password: Y8RnzCcesdyiNYY
+  username: kblair
+- ad_groups:
+  - IT
+  email: rachel.sutton@pwnzone.lab
+  first_name: Rachel
+  last_name: Sutton
+  ou: IT
+  password: RiHJGePqBACGmU0
+  username: rsutton
+- ad_groups:
+  - Sales
+  email: thomas.garcia@pwnzone.lab
+  first_name: Thomas
+  last_name: Garcia
+  ou: Sales
+  password: VwaLW3cMenFdcvA
+  username: tgarcia
+- ad_groups:
+  - Engineering
+  email: ryan.carr@pwnzone.lab
+  first_name: Ryan
+  last_name: Carr
+  ou: Engineering
+  password: qe7N0i9Ycn0CoBl
+  username: rcarr
+- ad_groups:
+  - IT
+  email: robin.levy@pwnzone.lab
+  first_name: Robin
+  last_name: Levy
+  ou: IT
+  password: AJLCrqHUsqHkmyw
+  username: rlevy
+- ad_groups:
+  - Sales
+  email: thomas.grimes@pwnzone.lab
+  first_name: Thomas
+  last_name: Grimes
+  ou: Sales
+  password: dBGH1UMerDKjKbd
+  username: tgrimes
+- ad_groups:
+  - IT
+  email: jorge.trujillo@pwnzone.lab
+  first_name: Jorge
+  last_name: Trujillo
+  ou: IT
+  password: YvoMFHHn3cToq62
+  username: jtrujillo
+- ad_groups:
+  - Accounting
+  email: ana.smith@pwnzone.lab
+  first_name: Ana
+  last_name: Smith
+  ou: Accounting
+  password: MTDYZ7EDiyMKVG9
+  username: asmith
+- ad_groups:
+  - Engineering
+  email: jennifer.ross@pwnzone.lab
+  first_name: Jennifer
+  last_name: Ross
+  ou: Engineering
+  password: AzACoyMIF6m4kWE
+  username: jross
+- ad_groups:
+  - IT
+  email: mallory.barnett@pwnzone.lab
+  first_name: Mallory
+  last_name: Barnett
+  ou: IT
+  password: QXRycMbt7JzphVz
+  username: mbarnett
+- ad_groups:
+  - Sales
+  email: aaron.snyder@pwnzone.lab
+  first_name: Aaron
+  last_name: Snyder
+  ou: Sales
+  password: FCY5WvLmuyA1c3z
+  username: asnyder
+- ad_groups:
+  - Sales
+  email: mikayla.sanchez@pwnzone.lab
+  first_name: Mikayla
+  last_name: Sanchez
+  ou: Sales
+  password: ekzJUoESRNVrMSv
+  username: msanchez
+- ad_groups:
+  - HR
+  email: mark.harrell@pwnzone.lab
+  first_name: Mark
+  last_name: Harrell
+  ou: HR
+  password: yPdKussxfely30Z
+  username: mharrell
+- ad_groups:
+  - HR
+  email: james.bradley@pwnzone.lab
+  first_name: James
+  last_name: Bradley
+  ou: HR
+  password: pCcKMdSSr1rwWW9
+  username: jbradley
+- ad_groups:
+  - Engineering
+  email: john.ponce@pwnzone.lab
+  first_name: John
+  last_name: Ponce
+  ou: Engineering
+  password: uBLacJCwoKJ4YDg
+  username: jponce
+- ad_groups:
+  - Engineering
+  email: linda.west@pwnzone.lab
+  first_name: Linda
+  last_name: West
+  ou: Engineering
+  password: PzYHOGlX1dIt9Wq
+  username: lwest
+- ad_groups:
+  - HR
+  email: christopher.flores@pwnzone.lab
+  first_name: Christopher
+  last_name: Flores
+  ou: HR
+  password: JkRP4FqYOFvBr37
+  username: cflores
+- ad_groups:
+  - IT
+  email: william.cantu@pwnzone.lab
+  first_name: William
+  last_name: Cantu
+  ou: IT
+  password: cnbkZhmjnQrBa2u
+  username: wcantu
+- ad_groups:
+  - Accounting
+  email: daniel.arnold@pwnzone.lab
+  first_name: Daniel
+  last_name: Arnold
+  ou: Accounting
+  password: fZKewrz304kSoXw
+  username: darnold
+- ad_groups:
+  - IT
+  email: jasmine.kelley@pwnzone.lab
+  first_name: Jasmine
+  last_name: Kelley
+  ou: IT
+  password: ZYgnJgpJOXgp48f
+  username: jkelley
+- ad_groups:
+  - Accounting
+  email: lisa.fernandez@pwnzone.lab
+  first_name: Lisa
+  last_name: Fernandez
+  ou: Accounting
+  password: 0Gy5g4XFX37dIT6
+  username: lfernandez
+- ad_groups:
+  - Engineering
+  email: tamara.morrison@pwnzone.lab
+  first_name: Tamara
+  last_name: Morrison
+  ou: Engineering
+  password: sfkXWRGpiHkkRB8
+  username: tmorrison
+- ad_groups:
+  - Engineering
+  email: briana.wallace@pwnzone.lab
+  first_name: Briana
+  last_name: Wallace
+  ou: Engineering
+  password: uGf1KvTcUAJro8v
+  username: bwallace
+- ad_groups:
+  - Accounting
+  email: caitlyn.cruz@pwnzone.lab
+  first_name: Caitlyn
+  last_name: Cruz
+  ou: Accounting
+  password: zBZtnmzZBeCp867
+  username: ccruz
+- ad_groups:
+  - Engineering
+  email: barbara.roberts@pwnzone.lab
+  first_name: Barbara
+  last_name: Roberts
+  ou: Engineering
+  password: CGQ3tY4ugupwwfb
+  username: broberts
+- ad_groups:
+  - Accounting
+  email: jaime.lopez@pwnzone.lab
+  first_name: Jaime
+  last_name: Lopez
+  ou: Accounting
+  password: NRY2NI1jpdRZt9V
+  username: jlopez
+- ad_groups:
+  - Sales
+  email: chloe.douglas@pwnzone.lab
+  first_name: Chloe
+  last_name: Douglas
+  ou: Sales
+  password: RnAq0KOqDsZSjlf
+  username: cdouglas
+- ad_groups:
+  - Sales
+  email: thomas.davis@pwnzone.lab
+  first_name: Thomas
+  last_name: Davis
+  ou: Sales
+  password: twqgvbmeq62o0Zr
+  username: tdavis
+- ad_groups:
+  - Engineering
+  email: katherine.mcdowell@pwnzone.lab
+  first_name: Katherine
+  last_name: Mcdowell
+  ou: Engineering
+  password: FkWiByQCEfJDRrs
+  username: kmcdowell
+- ad_groups:
+  - Engineering
+  email: sandra.kirby@pwnzone.lab
+  first_name: Sandra
+  last_name: Kirby
+  ou: Engineering
+  password: k8gRCVzyHvwQe3A
+  username: skirby
+- ad_groups:
+  - Sales
+  email: rachael.leblanc@pwnzone.lab
+  first_name: Rachael
+  last_name: Leblanc
+  ou: Sales
+  password: zDcs6DoLXDOWCMP
+  username: rleblanc
+- ad_groups:
+  - Sales
+  email: amber.myers@pwnzone.lab
+  first_name: Amber
+  last_name: Myers
+  ou: Sales
+  password: Qom7nqHwoqonb39
+  username: amyers
+- ad_groups:
+  - HR
+  email: janet.hill@pwnzone.lab
+  first_name: Janet
+  last_name: Hill
+  ou: HR
+  password: ZegGkjzM4OsGHMf
+  username: jhill
+- ad_groups:
+  - Engineering
+  email: lisa.atkinson@pwnzone.lab
+  first_name: Lisa
+  last_name: Atkinson
+  ou: Engineering
+  password: BlCBj6TDLWEUGMx
+  username: latkinson
+- ad_groups:
+  - Sales
+  email: patty.lawrence@pwnzone.lab
+  first_name: Patty
+  last_name: Lawrence
+  ou: Sales
+  password: MCpFjW3MlT8Nine
+  username: plawrence
+- ad_groups:
+  - Accounting
+  email: stephanie.riley@pwnzone.lab
+  first_name: Stephanie
+  last_name: Riley
+  ou: Accounting
+  password: i3XnLqJsM0pkSB7
+  username: sriley
+- ad_groups:
+  - IT
+  email: shannon.keller@pwnzone.lab
+  first_name: Shannon
+  last_name: Keller
+  ou: IT
+  password: NEs1Gv1nARsZJmM
+  username: skeller
+- ad_groups:
+  - Engineering
+  email: wendy.stark@pwnzone.lab
+  first_name: Wendy
+  last_name: Stark
+  ou: Engineering
+  password: j24ZFtb9JnznHLD
+  username: wstark
+- ad_groups:
+  - IT
+  email: laura.miller@pwnzone.lab
+  first_name: Laura
+  last_name: Miller
+  ou: IT
+  password: 77JQlnz71LmPC2U
+  username: lmiller
+- ad_groups:
+  - Sales
+  email: chloe.tucker@pwnzone.lab
+  first_name: Chloe
+  last_name: Tucker
+  ou: Sales
+  password: g3LCP0XqN244KfC
+  username: ctucker
+- ad_groups:
+  - Domain Admins
+  email: crystal.bruce@pwnzone.lab
+  first_name: Crystal
+  last_name: Bruce
+  ou: null
+  password: nP747E00wb2RMoK
+  username: cbruce
+- ad_groups:
+  - Domain Admins
+  email: john.dennis@pwnzone.lab
+  first_name: John
+  last_name: Dennis
+  ou: null
+  password: 78tfOWI8Yu0Vmiv
+  username: jdennis

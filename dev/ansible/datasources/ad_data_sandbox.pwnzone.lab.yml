@@ -1,0 +1,190 @@
+ad_groups:
+- Sales
+- Engineering
+- HR
+- IT
+- Accounting
+- Domain Admins
+ous:
+- Sales
+- Engineering
+- HR
+- IT
+- Accounting
+users:
+- email: megan.chang@sandbox.pwnzone.local
+  first_name: Megan
+  ad_groups:
+  - IT
+  last_name: Chang
+  ou: IT
+  password: DGmUoeVr5IL1u0P
+  username: mchang
+- email: robert.green@sandbox.pwnzone.local
+  first_name: Robert
+  ad_groups:
+  - HR
+  last_name: Green
+  ou: HR
+  password: tn0TKNI9Kh0gKD0
+  username: rgreen
+- email: william.sullivan@sandbox.pwnzone.local
+  first_name: William
+  ad_groups:
+  - Accounting
+  last_name: Sullivan
+  ou: Accounting
+  password: Nhs4tYW4WU4dGA9
+  username: wsullivan
+- email: kristen.turner@sandbox.pwnzone.local
+  first_name: Kristen
+  ad_groups:
+  - Engineering
+  last_name: Turner
+  ou: Engineering
+  password: de9c5xXUAst6KV5
+  username: kturner
+- email: thomas.silva@sandbox.pwnzone.local
+  first_name: Thomas
+  ad_groups:
+  - Engineering
+  last_name: Silva
+  ou: Engineering
+  password: 5Y5e7FykmFse3te
+  username: tsilva
+- email: rebecca.wagner@sandbox.pwnzone.local
+  first_name: Rebecca
+  ad_groups:
+  - Engineering
+  last_name: Wagner
+  ou: Engineering
+  password: yXu4OVsoGN2SeCR
+  username: rwagner
+- email: juan.campos@sandbox.pwnzone.local
+  first_name: Juan
+  ad_groups:
+  - HR
+  last_name: Campos
+  ou: HR
+  password: cvq6MCpTWjI0CYR
+  username: jcampos
+- email: christine.king@sandbox.pwnzone.local
+  first_name: Christine
+  ad_groups:
+  - Engineering
+  last_name: King
+  ou: Engineering
+  password: n2ZvNFOhmgJtQR1
+  username: cking
+- email: renee.mcgrath@sandbox.pwnzone.local
+  first_name: Renee
+  ad_groups:
+  - Sales
+  last_name: Mcgrath
+  ou: Sales
+  password: wwnClGfcqYzrnJT
+  username: rmcgrath
+- email: lisa.barrera@sandbox.pwnzone.local
+  first_name: Lisa
+  ad_groups:
+  - Sales
+  last_name: Barrera
+  ou: Sales
+  password: ivAppTd6rvejZX3
+  username: lbarrera
+- email: kyle.blair@sandbox.pwnzone.local
+  first_name: Kyle
+  ad_groups:
+  - HR
+  last_name: Blair
+  ou: HR
+  password: 7pocQn1LaVQ7KGH
+  username: kblair
+- email: rachel.sutton@sandbox.pwnzone.local
+  first_name: Rachel
+  ad_groups:
+  - IT
+  last_name: Sutton
+  ou: IT
+  password: svYKGLWmeE5BM0r
+  username: rsutton
+- email: thomas.garcia@sandbox.pwnzone.local
+  first_name: Thomas
+  ad_groups:
+  - HR
+  last_name: Garcia
+  ou: HR
+  password: BL5pldyUmADfgCk
+  username: tgarcia
+- email: ryan.carr@sandbox.pwnzone.local
+  first_name: Ryan
+  ad_groups:
+  - Sales
+  last_name: Carr
+  ou: Sales
+  password: g8YC7Yy2RPqJ3NN
+  username: rcarr
+- email: robin.levy@sandbox.pwnzone.local
+  first_name: Robin
+  ad_groups:
+  - HR
+  last_name: Levy
+  ou: HR
+  password: d1ZS7Qu21lIMs8a
+  username: rlevy
+- email: thomas.grimes@sandbox.pwnzone.local
+  first_name: Thomas
+  ad_groups:
+  - HR
+  last_name: Grimes
+  ou: HR
+  password: ZAtOPZY6Krxi52e
+  username: tgrimes
+- email: jorge.trujillo@sandbox.pwnzone.local
+  first_name: Jorge
+  ad_groups:
+  - Sales
+  last_name: Trujillo
+  ou: Sales
+  password: DmcneYjOXkiNA5p
+  username: jtrujillo
+- email: ana.smith@sandbox.pwnzone.local
+  first_name: Ana
+  ad_groups:
+  - Engineering
+  last_name: Smith
+  ou: Engineering
+  password: UXuaMsySwHgGxT5
+  username: asmith
+- email: jennifer.ross@sandbox.pwnzone.local
+  first_name: Jennifer
+  ad_groups:
+  - Sales
+  last_name: Ross
+  ou: Sales
+  password: 0nz2xQ44GumoWpl
+  username: jross
+- email: mallory.barnett@sandbox.pwnzone.local
+  first_name: Mallory
+  ad_groups:
+  - Sales
+  last_name: Barnett
+  ou: Sales
+  password: 1rn8y4FDjp4mNNU
+  username: mbarnett
+- email: aaron.snyder@sandbox.pwnzone.local
+  first_name: Aaron
+  ad_groups:
+  - Domain Admins
+  last_name: Snyder
+  ou: null
+  password: 5u8p19T1jVqkW6K
+  username: adm_asnyder
+- email: mikayla.sanchez@sandbox.pwnzone.local
+  first_name: Mikayla
+  ad_groups:
+  - Domain Admins
+  last_name: Sanchez
+  ou: null
+  password: 9RSXIr9XecuQTNY
+  username: adm_msanchez

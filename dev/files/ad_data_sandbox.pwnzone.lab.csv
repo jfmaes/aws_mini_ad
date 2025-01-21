@@ -1,0 +1,23 @@
+username,first_name,last_name,email,password,ou,groups
+mchang,Megan,Chang,megan.chang@sandbox.pwnzone.lab,DGmUoeVr5IL1u0P,IT,IT
+rgreen,Robert,Green,robert.green@sandbox.pwnzone.lab,tn0TKNI9Kh0gKD0,HR,HR
+wsullivan,William,Sullivan,william.sullivan@sandbox.pwnzone.lab,Nhs4tYW4WU4dGA9,Accounting,Accounting
+kturner,Kristen,Turner,kristen.turner@sandbox.pwnzone.lab,de9c5xXUAst6KV5,Engineering,Engineering
+tsilva,Thomas,Silva,thomas.silva@sandbox.pwnzone.lab,5Y5e7FykmFse3te,Engineering,Engineering
+rwagner,Rebecca,Wagner,rebecca.wagner@sandbox.pwnzone.lab,yXu4OVsoGN2SeCR,Engineering,Engineering
+jcampos,Juan,Campos,juan.campos@sandbox.pwnzone.lab,cvq6MCpTWjI0CYR,HR,HR
+cking,Christine,King,christine.king@sandbox.pwnzone.lab,n2ZvNFOhmgJtQR1,Engineering,Engineering
+rmcgrath,Renee,Mcgrath,renee.mcgrath@sandbox.pwnzone.lab,wwnClGfcqYzrnJT,Sales,Sales
+lbarrera,Lisa,Barrera,lisa.barrera@sandbox.pwnzone.lab,ivAppTd6rvejZX3,Sales,Sales
+kblair,Kyle,Blair,kyle.blair@sandbox.pwnzone.lab,7pocQn1LaVQ7KGH,HR,HR
+rsutton,Rachel,Sutton,rachel.sutton@sandbox.pwnzone.lab,svYKGLWmeE5BM0r,IT,IT
+tgarcia,Thomas,Garcia,thomas.garcia@sandbox.pwnzone.lab,BL5pldyUmADfgCk,HR,HR
+rcarr,Ryan,Carr,ryan.carr@sandbox.pwnzone.lab,g8YC7Yy2RPqJ3NN,Sales,Sales
+rlevy,Robin,Levy,robin.levy@sandbox.pwnzone.lab,d1ZS7Qu21lIMs8a,HR,HR
+tgrimes,Thomas,Grimes,thomas.grimes@sandbox.pwnzone.lab,ZAtOPZY6Krxi52e,HR,HR
+jtrujillo,Jorge,Trujillo,jorge.trujillo@sandbox.pwnzone.lab,DmcneYjOXkiNA5p,Sales,Sales
+asmith,Ana,Smith,ana.smith@sandbox.pwnzone.lab,UXuaMsySwHgGxT5,Engineering,Engineering
+jross,Jennifer,Ross,jennifer.ross@sandbox.pwnzone.lab,0nz2xQ44GumoWpl,Sales,Sales
+mbarnett,Mallory,Barnett,mallory.barnett@sandbox.pwnzone.lab,1rn8y4FDjp4mNNU,Sales,Sales
+adm_asnyder,Aaron,Snyder,aaron.snyder@sandbox.pwnzone.lab,5u8p19T1jVqkW6K,None,Domain Admins
+adm_msanchez,Mikayla,Sanchez,mikayla.sanchez@sandbox.pwnzone.lab,9RSXIr9XecuQTNY,None,Domain Admins

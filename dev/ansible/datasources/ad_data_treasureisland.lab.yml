@@ -1,0 +1,102 @@
+ad_groups:
+- Sales
+- Engineering
+- HR
+- IT
+- Accounting
+- Domain Admins
+ous:
+- Sales
+- Engineering
+- HR
+- IT
+- Accounting
+users:
+- ad_groups:
+  - Engineering
+  email: megan.chang@treasureisland.lab
+  first_name: Megan
+  last_name: Chang
+  ou: Engineering
+  password: IpOFk6OfXV3YsIF
+  username: mchang
+- ad_groups:
+  - Accounting
+  email: robert.green@treasureisland.lab
+  first_name: Robert
+  last_name: Green
+  ou: Accounting
+  password: UO2JQFjVVcocEZ5
+  username: rgreen
+- ad_groups:
+  - HR
+  email: william.sullivan@treasureisland.lab
+  first_name: William
+  last_name: Sullivan
+  ou: HR
+  password: TMUaSFKZevBrT7f
+  username: wsullivan
+- ad_groups:
+  - Sales
+  email: kristen.turner@treasureisland.lab
+  first_name: Kristen
+  last_name: Turner
+  ou: Sales
+  password: ih2W6QsFKcZOMm0
+  username: kturner
+- ad_groups:
+  - Engineering
+  email: thomas.silva@treasureisland.lab
+  first_name: Thomas
+  last_name: Silva
+  ou: Engineering
+  password: hrfiVE2YA1BTyCG
+  username: tsilva
+- ad_groups:
+  - HR
+  email: rebecca.wagner@treasureisland.lab
+  first_name: Rebecca
+  last_name: Wagner
+  ou: HR
+  password: w446ZLR1ArxSPER
+  username: rwagner
+- ad_groups:
+  - Sales
+  email: juan.campos@treasureisland.lab
+  first_name: Juan
+  last_name: Campos
+  ou: Sales
+  password: hUaQax28NNY8uBU
+  username: jcampos
+- ad_groups:
+  - Sales
+  email: christine.king@treasureisland.lab
+  first_name: Christine
+  last_name: King
+  ou: Sales
+  password: hFQBAbjmPgUgupa
+  username: cking
+- ad_groups:
+  - Accounting
+  email: renee.mcgrath@treasureisland.lab
+  first_name: Renee
+  last_name: Mcgrath
+  ou: Accounting
+  password: tCJEBdHW2EElS76
+  username: rmcgrath
+- ad_groups:
+  - IT
+  email: lisa.barrera@treasureisland.lab
+  first_name: Lisa
+  last_name: Barrera
+  ou: IT
+  password: 5XTUfU8rXUyhhpM
+  username: lbarrera
+- ad_groups:
+  - Domain Admins
+  email: kyle.blair@treasureisland.lab
+  first_name: Kyle
+  last_name: Blair
+  ou: null
+  password: A5voz5z1SGtP26G
+  username: kblair
