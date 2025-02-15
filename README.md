@@ -11,7 +11,7 @@ Several helper scripts are also available to create snapshots yourself, make AMI
 To spin up the AWS AD environment you can use 
 
 ```Python
-python3 manager.py deploy -r <your region> -t <your version tag>
+python3 manger.py deploy -r <your region> -t <your version tag>
 ```
 
 At this point in time the following regions are supported:
