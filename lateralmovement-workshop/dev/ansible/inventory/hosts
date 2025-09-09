@@ -1,0 +1,29 @@
+dc_sandbox ansible_host=10.0.10.10
+dc_pwnzone ansible_host=10.0.100.10
+dc_treasureisland ansible_host=10.0.200.10
+ws01 ansible_host=10.0.10.20
+soc ansible_host=10.0.10.50
+
+[domaincontrollers]
+dc_pwnzone
+dc_sandbox
+dc_treasureisland
+
+[pwnzone]
+dc_pwnzone
+
+[sandbox]
+dc_sandbox
+ws01
+
+[treasureisland]
+dc_treasureisland
+
+[windows]
+dc_pwnzone
+dc_sandbox
+dc_treasureisland
+ws01
+
+[linux_servers] 
+soc

@@ -1,0 +1,88 @@
+# Ensure unzip happened at least once
+- name: Unzip Winlogbeat
+  community.windows.win_unzip:
+    src: "C:\\{{ winlogbeat_zip_name }}.zip"
+    dest: "{{ winlogbeat_dir }}"
+    creates: "{{ winlogbeat_extracted }}"
+  register: unzip_result
+
+- name: Ensure winlogbeat.exe is in {{ winlogbeat_dir }}
+  ansible.windows.win_powershell:
+    script: |
+      $src = "{{ winlogbeat_extracted }}"
+      $dst = "{{ winlogbeat_dir }}"
+      $exe = Join-Path $dst "winlogbeat.exe"
+
+      if (-not (Test-Path $exe)) {
+        if (Test-Path $src) {
+          Get-ChildItem -Path $src -Force | Move-Item -Destination $dst -Force
+          Remove-Item -Path $src -Recurse -Force
+          "moved"
+        } else {
+          "nothing_to_move"
+        }
+      } else {
+        "already_in_place"
+      }
+  register: move_result
+  changed_when: move_result.output is defined and ('moved' in (move_result.output | join(' ')))
+  failed_when: move_result.error is defined and (move_result.error | length) > 0
+
+- name: Install Winlogbeat service if missing
+  ansible.windows.win_powershell:
+    script: |
+      Set-Location "{{ winlogbeat_dir }}"
+      $svc = Get-Service -Name "Winlogbeat" -ErrorAction SilentlyContinue
+      if ($null -eq $svc) {
+        powershell -ExecutionPolicy Bypass -File ".\install-service-winlogbeat.ps1"
+        "installed"
+      } else {
+        "present"
+      }
+  register: install_result
+  changed_when: install_result.output is defined and ('installed' in (install_result.output | join(' ')))
+  failed_when: install_result.error is defined and (install_result.error | length) > 0
+
+- name: Create certs directory on Windows host
+  ansible.windows.win_file:
+    path: C:\Program Files\Winlogbeat\certs
+    state: directory
+
+- name: Fetch CA certificate from SOC machine
+  fetch:
+    src: /etc/elasticsearch/certs/ca.crt
+    dest: /tmp/ca.crt
+    flat: yes
+  delegate_to: soc
+  run_once: true
+
+- name: Copy CA certificate to Windows host
+  ansible.windows.win_copy:
+    src: /tmp/ca.crt
+    dest: C:\Program Files\Winlogbeat\certs\ca.crt
+
+- name: Copy Winlogbeat configuration
+  ansible.windows.win_template:
+    src: winlogbeat.yml.j2
+    dest: C:\Program Files\Winlogbeat\winlogbeat.yml
+  notify: Restart Winlogbeat
+
+- name: Setup Winlogbeat environment (index templates and pipelines)
+  ansible.windows.win_command: >
+    "{{ winlogbeat_exe }}" setup --pipelines --index-templates
+    -E setup.kibana.host="{{ soc_machine_ip }}:5601"
+    -E setup.kibana.protocol="https"
+    -E setup.kibana.username="elastic"
+    -E setup.kibana.password="{{ elastic_user_password }}"
+    -E output.elasticsearch.hosts=["https://{{ soc_machine_ip }}:9200"]
+    -E output.elasticsearch.username="elastic"
+    -E output.elasticsearch.password="{{ elastic_user_password }}"
+    -E output.elasticsearch.protocol="https"
+    -E output.elasticsearch.ssl.verification_mode="none"
+    -E output.elasticsearch.ssl.certificate_authorities="C:\\Program Files\\Winlogbeat\\certs\\ca.crt"
+  args:
+    chdir: "{{ winlogbeat_dir }}"
+  register: winlogbeat_setup_result
+  changed_when: winlogbeat_setup_result.rc != 0
+  failed_when: winlogbeat_setup_result.rc != 0 and "ERROR" in winlogbeat_setup_result.stderr
+  notify: Restart Winlogbeat

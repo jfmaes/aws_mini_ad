@@ -1,0 +1,7 @@
+domain_joined: false
+ansible_connection: winrm 
+ansible_user: "{{ 'Administrator' if not domain_joined else domain_admin_user }}"
+ansible_password: AnsibleAutomation123!
+ansible_winrm_scheme: http
+ansible_port: 5985
+ansible_winrm_transport: ntlm 

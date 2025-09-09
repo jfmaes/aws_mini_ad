@@ -1,0 +1,94 @@
+input {
+  beats {
+    port => 5044
+    ssl => false
+    # Disable SSL for now to simplify configuration
+    # ssl_certificate_authorities => ["/etc/elasticsearch/certs/ca.crt"]
+    # You could also use client certificates for Winlogbeat here for mutual TLS
+    # ssl_certificate => "/etc/logstash/certs/logstash-client.crt"
+    # ssl_key => "/etc/logstash/certs/logstash-client.key"
+  }
+}
+filter {
+  # Add a generic 'winlogbeat' tag to all events from Winlogbeat
+  mutate {
+    add_tag => ["winlogbeat"]
+  }
+
+  # --- Sysmon Event Categorization (Microsoft-Windows-Sysmon/Operational) ---
+  if [winlog][channel] == "Microsoft-Windows-Sysmon/Operational" {
+    mutate { add_tag => ["sysmon"] } # Generic Sysmon tag
+
+    if [winlog][event_id] == 1 { mutate { add_tag => ["sysmon_event_1", "process_creation"] } }
+    else if [winlog][event_id] == 3 { mutate { add_tag => ["sysmon_event_3", "network_connection"] } }
+    else if [winlog][event_id] == 7 { mutate { add_tag => ["sysmon_event_7", "image_load", "dll_load"] } }
+    else if [winlog][event_id] == 8 { mutate { add_tag => ["sysmon_event_8", "remote_thread_creation"] } }
+    else if [winlog][event_id] == 10 { mutate { add_tag => ["sysmon_event_10", "process_access"] } }
+    else if [winlog][event_id] == 11 { mutate { add_tag => ["sysmon_event_11", "file_creation"] } }
+    else if [winlog][event_id] == 12 or [winlog][event_id] == 13 or [winlog][event_id] == 14 { mutate { add_tag => ["sysmon_event_registry", "registry_event"] } }
+    else if [winlog][event_id] == 15 { mutate { add_tag => ["sysmon_event_15", "file_stream_creation"] } }
+    else if [winlog][event_id] == 17 or [winlog][event_id] == 18 { mutate { add_tag => ["sysmon_event_named_pipe", "named_pipe_event"] } }
+    else if [winlog][event_id] == 19 or [winlog][event_id] == 20 or [winlog][event_id] == 21 { mutate { add_tag => ["sysmon_event_wmi", "wmi_event"] } }
+    else if [winlog][event_id] == 22 { mutate { add_tag => ["sysmon_event_22", "dns_query"] } }
+    else if [winlog][event_id] == 23 { mutate { add_tag => ["sysmon_event_23", "file_delete"] } }
+    else if [winlog][event_id] == 25 { mutate { add_tag => ["sysmon_event_25", "process_tampering"] } }
+  }
+
+  # --- Windows Security Log Categorization (Security) ---
+  if [winlog][channel] == "Security" {
+    mutate { add_tag => ["win_security"] } # Generic Security tag
+
+    if [winlog][event_id] == 4624 {
+      mutate { add_tag => ["security_event_4624", "logon_success"] }
+      if [winlog][event_data][LogonType] == "2" { mutate { add_tag => ["logon_interactive"] } }
+      else if [winlog][event_data][LogonType] == "3" { mutate { add_tag => ["logon_network"] } }
+      else if [winlog][event_data][LogonType] == "5" { mutate { add_tag => ["logon_service"] } }
+      else if [winlog][event_data][LogonType] == "10" { mutate { add_tag => ["logon_remote_interactive"] } }
+    }
+    else if [winlog][event_id] == 4625 { mutate { add_tag => ["security_event_4625", "logon_failure"] } }
+    else if [winlog][event_id] == 4648 { mutate { add_tag => ["security_event_4648", "explicit_credentials_logon"] } }
+    else if [winlog][event_id] == 4634 { mutate { add_tag => ["security_event_4634", "logoff"] } }
+    else if [winlog][event_id] == 4672 { mutate { add_tag => ["security_event_4672", "special_privilege_assigned"] } }
+    else if [winlog][event_id] == 4688 { mutate { add_tag => ["security_event_4688", "process_creation_audit"] } }
+    else if [winlog][event_id] == 4698 { mutate { add_tag => ["security_event_4698", "scheduled_task_creation"] } }
+    else if [winlog][event_id] == 4768 { mutate { add_tag => ["security_event_4768", "kerberos_tgt_request"] } }
+    else if [winlog][event_id] == 4769 { mutate { add_tag => ["security_event_4769", "kerberos_service_ticket_request"] } }
+    else if [winlog][event_id] == 4776 { mutate { add_tag => ["security_event_4776", "ntlm_credential_validation"] } }
+    else if [winlog][event_id] == 4742 { mutate { add_tag => ["security_event_4742", "user_account_changed"] } }
+  }
+
+  # --- Windows System Log Categorization (System) ---
+  if [winlog][channel] == "System" {
+    mutate { add_tag => ["win_system"] }
+    if [winlog][event_id] == 7045 { mutate { add_tag => ["system_event_7045", "service_install"] } }
+    else if [winlog][event_id] == 7036 { mutate { add_tag => ["system_event_7036", "service_status_change"] } }
+  }
+
+  # --- PowerShell Operational Log Categorization (Microsoft-Windows-PowerShell/Operational) ---
+  if [winlog][channel] == "Microsoft-Windows-PowerShell/Operational" {
+    mutate { add_tag => ["powershell_log"] }
+    if [winlog][event_id] == 4104 { mutate { add_tag => ["powershell_event_4104", "powershell_script_block"] } }
+    else if [winlog][event_id] == 400 { mutate { add_tag => ["powershell_event_400", "powershell_engine_state"] } }
+    else if [winlog][event_id] == 600 { mutate { add_tag => ["powershell_event_600", "powershell_pipeline_execution"] } }
+  }
+
+  # --- TerminalServices-LocalSessionManager/Operational Log Categorization ---
+  if [winlog][channel] == "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational" {
+    mutate { add_tag => ["terminal_services_log"] }
+    if [winlog][event_id] == 21 { mutate { add_tag => ["terminal_services_event_21", "rdp_session_logon"] } }
+    else if [winlog][event_id] == 24 { mutate { add_tag => ["terminal_services_event_24", "rdp_session_disconnect"] } }
+    else if [winlog][event_id] == 25 { mutate { add_tag => ["terminal_services_event_25", "rdp_session_reconnect"] } }
+  }
+}
+
+output {
+  elasticsearch {
+    hosts => ["https://{{ ansible_host }}:9200"]
+    index => "winlogbeat-7.x-%{+YYYY.MM.dd}"
+    user => "logstash_system"
+    password => "${LS_PASSWORD}" # This references the secret from Logstash keystore
+    ssl => true
+    ssl_certificate_verification => false # For self-signed CA in lab
+    cacert => "/etc/elasticsearch/certs/ca.crt"
+  }
+}

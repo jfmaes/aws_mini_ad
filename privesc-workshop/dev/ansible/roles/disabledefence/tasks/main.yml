@@ -1,0 +1,70 @@
+- name: Disable SmartScreen
+  win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows\System
+    name: EnableSmartScreen
+    data: 0
+    type: dword
+
+- name: Disable firewall for Domain, Public and Private profiles
+  win_firewall:
+    state: disabled
+    profiles:
+      - Domain
+      - Private
+      - Public
+
+- name: Enable Remote Desktop
+  win_regedit:
+    path: HKLM:\System\CurrentControlSet\Control\Terminal Server
+    name: fDenyTSConnections
+    data: 0
+    type: dword
+
+- name: Disable Windows Updates
+  win_service:
+    name: wuauserv
+    start_mode: disabled
+    state: stopped
+
+- name: Disable Windows Defender Real-Time Protection using Registry part 1
+  win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender
+    name: DisableAntiSpyware
+    data: 1
+    type: dword
+
+- name: Disable Windows Defender Real-Time Protection using Registry part 2
+  win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection
+
+- name: Disable Windows Defender Real-Time Protection using Registry part 3
+  win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection
+    name: DisableBehaviorMonitoring
+    data: 1
+    type: dword
+
+- name: Disable Windows Defender Real-Time Protection using Registry part 4
+  win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection
+    name: DisableOnAccessProtection
+    data: 1
+    type: dword
+
+- name: Disable Windows Defender Real-Time Protection using Registry part 5
+  win_regedit:
+    path: HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender\Real-Time Protection
+    name: DisableScanOnRealtimeEnable
+    data: 1
+    type: dword
+
+- name: Disable RealTime Monitoring
+  win_command:
+    powershell.exe -command "Set-MpPreference -DisableRealtimeMonitoring $true"
+
+- name: Adding C:\ to the exclusions of defender
+  win_command:
+    powershell.exe -command "Set-MpPreference -ExclusionPath \"C:\\""
+
+- name: reboot
+  win_reboot:

@@ -1,0 +1,17 @@
+- name: Create scheduled task to run as privileged user for hash in memory
+  win_scheduled_task:
+    name: "KeepDomainAdminHashInMemory"
+    description: "Runs a benign command as a Domain Admin to ensure their hash is present in LSASS memory for workshop purposes (e.g., PtH demo)."
+    actions:
+      - path: C:\Windows\System32\cmd.exe
+        arguments: "/c whoami /all > C:\\temp\\domain_admin_info.txt" # Simple command that runs
+    triggers:
+      - type: logon # Run at user logon
+        user_id: "{{ privileged_username }}@{{ privileged_domain }}"
+      - type: daily
+        start_time: "00:00"
+        interval: 30 # Run every 30 minutes
+    username: "{{ privileged_username }}@{{ privileged_domain }}"
+    password: "{{ privileged_password }}"
+    state: present
+    run_level: highest

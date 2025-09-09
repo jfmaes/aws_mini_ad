@@ -1,0 +1,54 @@
+- name: Create Sysmon directory
+  win_file:
+    path: C:\Sysmon
+    state: directory
+
+- name: Download Sysmon zip
+  win_get_url:
+    url: https://download.sysinternals.com/files/Sysmon.zip
+    dest: C:\Sysmon\Sysmon.zip
+
+- name: Unzip Sysmon
+  win_unzip:
+    src: C:\Sysmon\Sysmon.zip
+    dest: C:\Sysmon
+    creates: C:\Sysmon\Sysmon64.exe # Indicator for successful unzip
+  register: unzip_result
+
+- name: Download Sysmon config (SwiftOnSecurity)
+  win_get_url:
+    url: https://raw.githubusercontent.com/SwiftOnSecurity/Sysmon-config/master/sysmonconfig-export.xml
+    dest: C:\Sysmon\sysmonconfig.xml
+
+# --- Logic: Uninstall existing Sysmon64 if found before reinstalling ---
+- name: Check if Sysmon64 service exists
+  ansible.windows.win_service_info:
+    name: Sysmon64
+  register: sysmon64_info
+
+- name: Uninstall existing Sysmon64 service if found
+  win_command: C:\Sysmon\Sysmon64.exe -accepteula -u
+  args:
+    chdir: C:\Sysmon
+  register: sysmon_uninstall_result
+  changed_when: sysmon_uninstall_result.rc != 0
+  failed_when: sysmon_uninstall_result.rc not in [0, 255] # 0 = success, 255 = not installed (no error)
+  when: sysmon64_info.exists # Only run if Sysmon64 service exists
+
+
+# --- Always (re)install Sysmon with config (now expecting "Sysmon64" as service name) ---
+- name: Install Sysmon with configuration
+  win_command: C:\Sysmon\Sysmon64.exe -accepteula -i C:\Sysmon\sysmonconfig.xml
+  args:
+    chdir: C:\Sysmon
+  register: sysmon_install_result
+  changed_when: sysmon_install_result.rc != 0
+  failed_when: sysmon_install_result.rc not in [0, 255] # 0 = success, 255 = already installed with same config
+  retries: 3
+  delay: 5 # Retry a few times in case of transient issues
+
+- name: Ensure Sysmon service is running
+  win_service:
+    name: Sysmon64
+    state: started
+    start_mode: auto

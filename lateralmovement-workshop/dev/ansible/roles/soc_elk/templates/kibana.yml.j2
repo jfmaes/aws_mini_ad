@@ -1,0 +1,20 @@
+# kibana.yml.j2
+server.port: 5601
+server.host: {{ ansible_host }}
+
+# Serve Kibana over HTTPS using the PKCS#12 we already generated
+server.ssl.enabled: true
+server.ssl.keystore.path: /etc/elasticsearch/certs/elastic-stack-certs.p12
+server.ssl.keystore.password: "{{ elastic_certs_password }}"
+
+# Kibana -> Elasticsearch (use the same CA that signed ES)
+elasticsearch.hosts: ["https://{{ es_host | default(ansible_host) }}:9200"]
+elasticsearch.username: "kibana_system"
+elasticsearch.password: "{{ kibana_user_password }}"
+elasticsearch.ssl.certificateAuthorities: ["/etc/elasticsearch/certs/ca.crt"]
+# Skip hostname verification if you might access ES by IP or a name not in the cert.
+# If your cert SANs include the IP/DNS you use, you can set "full".
+elasticsearch.ssl.verificationMode: certificate
+
+# Optional but fine
+kibana.index: ".kibana"

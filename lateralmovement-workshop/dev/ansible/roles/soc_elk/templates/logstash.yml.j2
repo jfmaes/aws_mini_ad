@@ -1,0 +1,16 @@
+# logstash.yml.j2
+
+# Core Logstash settings
+path.data: /var/lib/logstash
+path.logs: /var/log/logstash
+
+# Stack Monitoring to Elasticsearch (legacy collectors)
+xpack.monitoring.enabled: true
+xpack.monitoring.elasticsearch.hosts: ["https://{{ es_host | default(ansible_host) }}:9200"]
+xpack.monitoring.elasticsearch.username: "logstash_system"
+xpack.monitoring.elasticsearch.password: "{{ logstash_user_password }}"
+
+# Trust the ES CA (PEM)
+xpack.monitoring.elasticsearch.ssl.certificate_authority: /etc/elasticsearch/certs/ca.crt
+# Keep chain validation, skip hostname checks if using IPs
+xpack.monitoring.elasticsearch.ssl.verification_mode: certificate

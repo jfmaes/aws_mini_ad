@@ -1,0 +1,5 @@
+parent_domain_password: AnsibleAutomation123!
+safemode_password: SuperSecretSafeModePasswordForTheWin!?
+parent_domain: pwnzone.lab
+domain: sandbox.pwnzone.lab
+hostname: sandbox-dc01

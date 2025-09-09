@@ -1,0 +1,27 @@
+winlogbeat.event_logs:
+  - name: Application
+    ignore_older: 72h
+  - name: Security
+  - name: System
+  - name: Microsoft-Windows-Sysmon/Operational
+  - name: Microsoft-Windows-PowerShell/Operational
+  - name: Microsoft-Windows-TerminalServices-LocalSessionManager/Operational
+
+processors:
+  - add_host_metadata: ~
+  - add_cloud_metadata: ~
+
+output.logstash:
+  hosts: ["{{ soc_machine_ip }}:5044"]
+  protocol: "beats" # This is the default and implies the Beats protocol
+  ssl.enabled: true
+  ssl.verification_mode: certificate # Ensure server cert is valid against CA
+  ssl.certificate_authorities: ["C:\\Program Files\\Winlogbeat\\certs\\ca.crt"]
+
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: C:\Program Files\Winlogbeat\logs
+  name: winlogbeat
+  keepfiles: 7
+  maxsize: 10
