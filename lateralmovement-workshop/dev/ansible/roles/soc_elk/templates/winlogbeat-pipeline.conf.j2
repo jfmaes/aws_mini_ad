@@ -1,92 +1,274 @@
 input {
-  beats {
-    port => 5044
-    ssl => false
-    # Disable SSL for now to simplify configuration
-    # ssl_certificate_authorities => ["/etc/elasticsearch/certs/ca.crt"]
-    # You could also use client certificates for Winlogbeat here for mutual TLS
-    # ssl_certificate => "/etc/logstash/certs/logstash-client.crt"
-    # ssl_key => "/etc/logstash/certs/logstash-client.key"
-  }
+  beats { port => 5044 }
 }
+
 filter {
-  # Add a generic 'winlogbeat' tag to all events from Winlogbeat
-  mutate {
-    add_tag => ["winlogbeat"]
+  # Add a generic 'winlogbeat' tag to all events
+  mutate { add_tag => ["winlogbeat"] }
+
+  # Normalize winlog.event_id to integer for proper conditional logic
+  if [winlog][event_id] {
+    mutate {
+      convert => { "[winlog][event_id]" => "integer" }
+    }
   }
 
-  # --- Sysmon Event Categorization (Microsoft-Windows-Sysmon/Operational) ---
+  # --- Sysmon Event Categorization & ECS Normalization ---
   if [winlog][channel] == "Microsoft-Windows-Sysmon/Operational" {
-    mutate { add_tag => ["sysmon"] } # Generic Sysmon tag
+    mutate { add_tag => ["sysmon"] }
 
-    if [winlog][event_id] == 1 { mutate { add_tag => ["sysmon_event_1", "process_creation"] } }
-    else if [winlog][event_id] == 3 { mutate { add_tag => ["sysmon_event_3", "network_connection"] } }
-    else if [winlog][event_id] == 7 { mutate { add_tag => ["sysmon_event_7", "image_load", "dll_load"] } }
-    else if [winlog][event_id] == 8 { mutate { add_tag => ["sysmon_event_8", "remote_thread_creation"] } }
-    else if [winlog][event_id] == 10 { mutate { add_tag => ["sysmon_event_10", "process_access"] } }
-    else if [winlog][event_id] == 11 { mutate { add_tag => ["sysmon_event_11", "file_creation"] } }
-    else if [winlog][event_id] == 12 or [winlog][event_id] == 13 or [winlog][event_id] == 14 { mutate { add_tag => ["sysmon_event_registry", "registry_event"] } }
-    else if [winlog][event_id] == 15 { mutate { add_tag => ["sysmon_event_15", "file_stream_creation"] } }
-    else if [winlog][event_id] == 17 or [winlog][event_id] == 18 { mutate { add_tag => ["sysmon_event_named_pipe", "named_pipe_event"] } }
-    else if [winlog][event_id] == 19 or [winlog][event_id] == 20 or [winlog][event_id] == 21 { mutate { add_tag => ["sysmon_event_wmi", "wmi_event"] } }
-    else if [winlog][event_id] == 22 { mutate { add_tag => ["sysmon_event_22", "dns_query"] } }
-    else if [winlog][event_id] == 23 { mutate { add_tag => ["sysmon_event_23", "file_delete"] } }
-    else if [winlog][event_id] == 25 { mutate { add_tag => ["sysmon_event_25", "process_tampering"] } }
+    # Sysmon 1: Process Creation -> ECS
+    if [winlog][event_id] == 1 {
+      mutate { add_tag => ["sysmon_event_1", "process_creation"] }
+      mutate {
+        copy => {
+          "[winlog][event_data][CommandLine]"        => "[process][command_line]"
+          "[winlog][event_data][Image]"              => "[process][executable]"
+          "[winlog][event_data][ProcessId]"          => "[process][pid]"
+          "[winlog][event_data][User]"               => "[user][name]"
+          "[winlog][event_data][ParentCommandLine]"  => "[process][parent][command_line]"
+          "[winlog][event_data][ParentImage]"        => "[process][parent][executable]"
+          "[winlog][event_data][ParentProcessId]"    => "[process][parent][pid]"
+        }
+        convert => {
+          "[process][pid]"         => "integer"
+          "[process][parent][pid]" => "integer"
+        }
+        add_field => {
+          "[event][category]" => "process"
+          "[event][type]"     => "start"
+          "[event][kind]"     => "event"
+        }
+      }
+      # Hashes: "MD5=...,SHA256=..." -> ECS process.hash.*
+      if [winlog][event_data][Hashes] {
+        kv {
+          source        => "[winlog][event_data][Hashes]"
+          field_split   => ","
+          value_split   => "="
+          target        => "[process][hash]"
+          transform_key => "lowercase"
+        }
+      }
+      # Tag suspicious command line arguments often used by Empire
+      if [process][command_line] {
+        if [process][command_line] =~ /(?i)invoke-mimikatz|sekurlsa::logonpasswords|invoke-expression|iex|downloadstring/ {
+          mutate { add_tag => ["tactic_credential_access"] }
+        }
+        if [process][command_line] =~ /(?i)invoke-psexec|invoke-wmi|schtasks|net use/ {
+          mutate { add_tag => ["tactic_lateral_movement"] }
+        }
+      }
+    }
+
+    # Sysmon 3: Network Connection -> ECS
+    else if [winlog][event_id] == 3 {
+      mutate { add_tag => ["sysmon_event_3", "network_connection"] }
+      mutate {
+        copy => {
+          "[winlog][event_data][DestinationIp]"   => "[destination][ip]"
+          "[winlog][event_data][DestinationPort]" => "[destination][port]"
+          "[winlog][event_data][SourceIp]"        => "[source][ip]"
+          "[winlog][event_data][SourcePort]"      => "[source][port]"
+          "[winlog][event_data][Protocol]"        => "[network][transport]"
+        }
+        convert => {
+          "[destination][port]" => "integer"
+          "[source][port]"      => "integer"
+        }
+        lowercase => [ "[network][transport]" ]
+        add_field => {
+          "[event][category]" => "network"
+          "[event][type]"     => ["connection", "start"]
+          "[event][kind]"     => "event"
+        }
+      }
+      # Tag common lateral movement ports
+      if [destination][port] {
+        if [destination][port] == 445 { mutate { add_tag => ["smb_traffic"] } }
+        if [destination][port] == 3389 { mutate { add_tag => ["rdp_traffic"] } }
+        if [destination][port] == 5985 or [destination][port] == 5986 { mutate { add_tag => ["winrm_traffic"] } }
+      }
+    }
+
+    # Sysmon 8: CreateRemoteThread (Code Injection) -> ECS
+    else if [winlog][event_id] == 8 {
+      mutate { add_tag => ["sysmon_event_8", "remote_thread_creation", "tactic_defense_evasion"] }
+      mutate {
+        copy => {
+          "[winlog][event_data][SourceProcessId]" => "[process][pid]"
+          "[winlog][event_data][SourceImage]"     => "[process][executable]"
+          "[winlog][event_data][TargetProcessId]" => "[process][parent][pid]"
+          "[winlog][event_data][TargetImage]"     => "[process][parent][executable]"
+        }
+        add_field => {
+          "[event][category]" => "process"
+          "[event][type]"     => "access"
+          "[event][kind]"     => "event"
+        }
+      }
+    }
+
+    # Sysmon 10: ProcessAccess (Credential Dumping) -> ECS
+    else if [winlog][event_id] == 10 {
+      mutate { add_tag => ["sysmon_event_10", "process_access", "tactic_credential_access"] }
+      mutate {
+        copy => {
+          "[winlog][event_data][SourceProcessId]" => "[process][pid]"
+          "[winlog][event_data][SourceImage]"     => "[process][executable]"
+          "[winlog][event_data][TargetProcessId]" => "[process][parent][pid]"
+          "[winlog][event_data][TargetImage]"     => "[process][parent][executable]"
+        }
+        add_field => {
+          "[event][category]" => "process"
+          "[event][type]"     => "access"
+          "[event][kind]"     => "event"
+        }
+      }
+      # Specifically tag access to LSASS, a key indicator of Mimikatz
+      if [process][parent][executable] and [process][parent][executable] =~ /(?i)lsass.exe/ {
+        mutate { add_tag => ["lsass_access"] }
+      }
+    }
+
+    # Sysmon 11: File Creation (PsExec artifact) -> ECS
+    else if [winlog][event_id] == 11 {
+      mutate { add_tag => ["sysmon_event_11", "file_creation"] }
+      mutate {
+        copy => { "[winlog][event_data][TargetFilename]" => "[file][path]" }
+        add_field => {
+          "[event][category]" => "file"
+          "[event][type]"     => "creation"
+          "[event][kind]"     => "event"
+        }
+      }
+      # Specifically tag PsExec service executable creation
+      if [file][path] and [file][path] =~ /(?i)PSEXESVC.exe/ {
+        mutate { add_tag => ["psexec_artifact", "tactic_lateral_movement"] }
+      }
+    }
+    
+    # Sysmon 17/18: Named Pipe Events (PsExec, Empire) -> ECS
+    else if [winlog][event_id] == 17 or [winlog][event_id] == 18 {
+      mutate { add_tag => ["sysmon_event_named_pipe", "named_pipe_event"] }
+      mutate {
+        copy => { "[winlog][event_data][PipeName]" => "[file][name]" } # Mapping PipeName to file.name for ECS
+        add_field => {
+          "[event][category]" => "iam"
+          "[event][type]"     => "user"
+          "[event][kind]"     => "event"
+        }
+      }
+      # Tag common PsExec and Cobalt Strike/Empire pipes
+      if [file][name] {
+        if [file][name] =~ /(?i)psexesvc|paexec|remcom/ { mutate { add_tag => ["psexec_pipe", "tactic_lateral_movement"] } }
+        if [file][name] =~ /(?i)msagent|postex/ { mutate { add_tag => ["empire_pipe", "tactic_lateral_movement"] } }
+      }
+    }
+    
+    # Sysmon 19-21: WMI Events (Lateral Movement)
+    else if [winlog][event_id] == 19 or [winlog][event_id] == 20 or [winlog][event_id] == 21 {
+      mutate { add_tag => ["sysmon_event_wmi", "wmi_event", "tactic_lateral_movement"] }
+    }
   }
 
-  # --- Windows Security Log Categorization (Security) ---
-  if [winlog][channel] == "Security" {
-    mutate { add_tag => ["win_security"] } # Generic Security tag
+  # --- Windows Security Log Categorization & ECS Normalization ---
+  else if [winlog][channel] == "Security" {
+    mutate { add_tag => ["win_security"] }
 
+    # Security 4624: Successful Logon (PtH, RDP, WinRM) -> ECS
     if [winlog][event_id] == 4624 {
       mutate { add_tag => ["security_event_4624", "logon_success"] }
-      if [winlog][event_data][LogonType] == "2" { mutate { add_tag => ["logon_interactive"] } }
-      else if [winlog][event_data][LogonType] == "3" { mutate { add_tag => ["logon_network"] } }
-      else if [winlog][event_data][LogonType] == "5" { mutate { add_tag => ["logon_service"] } }
-      else if [winlog][event_data][LogonType] == "10" { mutate { add_tag => ["logon_remote_interactive"] } }
+      mutate {
+        copy => {
+          "[winlog][event_data][TargetUserName]" => "[user][name]"
+          "[winlog][event_data][TargetDomainName]" => "[user][domain]"
+          "[winlog][event_data][IpAddress]" => "[source][ip]"
+          "[winlog][event_data][LogonType]" => "[winlog][logon][type]"
+        }
+        add_field => {
+          "[event][category]" => "authentication"
+          "[event][outcome]"  => "success"
+          "[event][kind]"     => "event"
+        }
+      }
     }
-    else if [winlog][event_id] == 4625 { mutate { add_tag => ["security_event_4625", "logon_failure"] } }
-    else if [winlog][event_id] == 4648 { mutate { add_tag => ["security_event_4648", "explicit_credentials_logon"] } }
-    else if [winlog][event_id] == 4634 { mutate { add_tag => ["security_event_4634", "logoff"] } }
-    else if [winlog][event_id] == 4672 { mutate { add_tag => ["security_event_4672", "special_privilege_assigned"] } }
-    else if [winlog][event_id] == 4688 { mutate { add_tag => ["security_event_4688", "process_creation_audit"] } }
-    else if [winlog][event_id] == 4698 { mutate { add_tag => ["security_event_4698", "scheduled_task_creation"] } }
-    else if [winlog][event_id] == 4768 { mutate { add_tag => ["security_event_4768", "kerberos_tgt_request"] } }
-    else if [winlog][event_id] == 4769 { mutate { add_tag => ["security_event_4769", "kerberos_service_ticket_request"] } }
-    else if [winlog][event_id] == 4776 { mutate { add_tag => ["security_event_4776", "ntlm_credential_validation"] } }
-    else if [winlog][event_id] == 4742 { mutate { add_tag => ["security_event_4742", "user_account_changed"] } }
+    
+    # Security 4672: Special Privileges Assigned (Token Impersonation)
+    else if [winlog][event_id] == 4672 {
+      mutate { add_tag => ["security_event_4672", "special_privilege_assigned", "tactic_privilege_escalation"] }
+      mutate {
+        copy => {
+          "[winlog][event_data][SubjectUserName]" => "[user][name]"
+          "[winlog][event_data][PrivilegeList]" => "[user][group][name]" # Reusing group name for privileges
+        }
+      }
+    }
+    
+    # Security 4769: Kerberos Service Ticket Requested (Kerberoasting)
+    else if [winlog][event_id] == 4769 {
+      mutate { add_tag => ["security_event_4769", "kerberos_service_ticket_request", "tactic_credential_access"] }
+      mutate {
+        copy => {
+          "[winlog][event_data][TargetUserName]" => "[user][name]"
+          "[winlog][event_data][ServiceName]" => "[service][name]"
+          "[winlog][event_data][TicketEncryptionType]" => "[kerberos][ticket][encryption_type]"
+        }
+      }
+      # Tag for RC4 encryption type, a classic sign of Kerberoasting
+      if [kerberos][ticket][encryption_type] and [kerberos][ticket][encryption_type] == "0x17" {
+        mutate { add_tag => ["kerberoasting_rc4"] }
+      }
+    }
+
+    # Other Security Event Tags
+    else if [winlog][event_id] == 4625 { mutate { add_tag => ["security_event_4625","logon_failure"] } }
+    else if [winlog][event_id] == 4688 { mutate { add_tag => ["security_event_4688","process_creation_audit"] } }
+    else if [winlog][event_id] == 4648 { mutate { add_tag => ["security_event_4648","explicit_credentials_logon"] } }
+    else if [winlog][event_id] == 4698 { mutate { add_tag => ["security_event_4698","scheduled_task_creation"] } }
+    else if [winlog][event_id] == 4776 { mutate { add_tag => ["security_event_4776","ntlm_credential_validation"] } }
   }
 
-  # --- Windows System Log Categorization (System) ---
-  if [winlog][channel] == "System" {
+  # --- Windows System Log Categorization (PsExec) ---
+  else if [winlog][channel] == "System" {
     mutate { add_tag => ["win_system"] }
-    if [winlog][event_id] == 7045 { mutate { add_tag => ["system_event_7045", "service_install"] } }
-    else if [winlog][event_id] == 7036 { mutate { add_tag => ["system_event_7036", "service_status_change"] } }
+    if [winlog][event_id] == 7045 {
+      mutate { add_tag => ["system_event_7045", "service_install", "tactic_lateral_movement"] }
+      # Tag PsExec service installation
+      if [winlog][event_data][ServiceName] and [winlog][event_data][ServiceName] =~ /(?i)PSEXESVC/ {
+        mutate { add_tag => ["psexec_service"] }
+      }
+    }
   }
 
-  # --- PowerShell Operational Log Categorization (Microsoft-Windows-PowerShell/Operational) ---
-  if [winlog][channel] == "Microsoft-Windows-PowerShell/Operational" {
+  # --- PowerShell Operational (Empire) ---
+  else if [winlog][channel] == "Microsoft-Windows-PowerShell/Operational" {
     mutate { add_tag => ["powershell_log"] }
-    if [winlog][event_id] == 4104 { mutate { add_tag => ["powershell_event_4104", "powershell_script_block"] } }
-    else if [winlog][event_id] == 400 { mutate { add_tag => ["powershell_event_400", "powershell_engine_state"] } }
-    else if [winlog][event_id] == 600 { mutate { add_tag => ["powershell_event_600", "powershell_pipeline_execution"] } }
+    if [winlog][event_id] == 4104 {
+      mutate { add_tag => ["powershell_event_4104", "powershell_script_block", "tactic_execution"] }
+      # Tag suspicious content in script blocks
+      if [winlog][event_data][ScriptBlockText] {
+        if [winlog][event_data][ScriptBlockText] =~ /(?i)invoke-mimikatz|invoke-expression|downloadstring|get-keystrokes|invoke-shellcode/ {
+          mutate { add_tag => ["suspicious_powershell_script"] }
+        }
+      }
+    }
   }
-
-  # --- TerminalServices-LocalSessionManager/Operational Log Categorization ---
-  if [winlog][channel] == "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational" {
+  
+  # --- RDP Logs ---
+  else if [winlog][channel] == "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational" {
     mutate { add_tag => ["terminal_services_log"] }
     if [winlog][event_id] == 21 { mutate { add_tag => ["terminal_services_event_21", "rdp_session_logon"] } }
-    else if [winlog][event_id] == 24 { mutate { add_tag => ["terminal_services_event_24", "rdp_session_disconnect"] } }
-    else if [winlog][event_id] == 25 { mutate { add_tag => ["terminal_services_event_25", "rdp_session_reconnect"] } }
   }
 }
+
 
 output {
   elasticsearch {
     hosts => ["https://{{ ansible_host }}:9200"]
     index => "winlogbeat-7.x-%{+YYYY.MM.dd}"
-    user => "logstash_system"
-    password => "${LS_PASSWORD}" # This references the secret from Logstash keystore
+    user => "winlogbeat_writer"
+    password => "WinlogbeatWrite123!"
     ssl => true
     ssl_certificate_verification => false # For self-signed CA in lab
     cacert => "/etc/elasticsearch/certs/ca.crt"

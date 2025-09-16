@@ -3,22 +3,41 @@
     path: C:\Sysmon
     state: directory
 
-- name: Download Sysmon zip
-  win_get_url:
+- name: Check if Sysmon zip already exists
+  ansible.windows.win_stat:
+    path: C:\Sysmon\Sysmon.zip
+  register: sysmon_zip_stat
+
+- name: Download Sysmon zip (only if not present)
+  ansible.windows.win_get_url:
     url: https://download.sysinternals.com/files/Sysmon.zip
     dest: C:\Sysmon\Sysmon.zip
+    force: no
+  when: not sysmon_zip_stat.stat.exists
+  register: sysmon_download_result
+  retries: 3
+  delay: 10
+  until: sysmon_download_result is succeeded
+
 
 - name: Unzip Sysmon
-  win_unzip:
+  community.windows.win_unzip:
     src: C:\Sysmon\Sysmon.zip
     dest: C:\Sysmon
     creates: C:\Sysmon\Sysmon64.exe # Indicator for successful unzip
   register: unzip_result
 
-- name: Download Sysmon config (SwiftOnSecurity)
-  win_get_url:
-    url: https://raw.githubusercontent.com/SwiftOnSecurity/Sysmon-config/master/sysmonconfig-export.xml
+- name: Check if Sysmon config already exists
+  ansible.windows.win_stat:
+    path: C:\Sysmon\sysmonconfig.xml
+  register: sysmon_config_stat
+
+- name: Copy Olaf Hartong's Sysmon modular config
+  ansible.windows.win_template:
+    src: sysmon-olaf-hartong.xml
     dest: C:\Sysmon\sysmonconfig.xml
+    backup: yes
+  register: sysmon_config_copy
 
 # --- Logic: Uninstall existing Sysmon64 if found before reinstalling ---
 - name: Check if Sysmon64 service exists
@@ -52,3 +71,17 @@
     name: Sysmon64
     state: started
     start_mode: auto
+
+# --- Cleanup temporary files after successful installation ---
+- name: Clean up Sysmon zip file after successful installation
+  ansible.windows.win_file:
+    path: C:\Sysmon\Sysmon.zip
+    state: absent
+  when: sysmon_install_result.rc == 0
+  ignore_errors: true
+
+- name: Verify Sysmon service is running after cleanup
+  ansible.windows.win_service_info:
+    name: Sysmon64
+  register: sysmon_final_check
+  failed_when: false

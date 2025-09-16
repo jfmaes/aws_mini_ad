@@ -25,15 +25,14 @@
       set_fact:
         domain_joined: true  
 
-- name: set the DNS server to the main domain controller for sandbox
-  hosts: dc_sandbox,dc_pwnzone
+- name: set DNS on dc_sandbox to point to parent domain controller
+  hosts: dc_sandbox
   tasks:
-    - name: set the DNS server to the main domain controller
+    - name: set DNS to parent domain controller before child domain creation
       win_dns_client:
         adapter_names: '*'
         ipv4_addresses:
           - "{{ hostvars[ 'dc_pwnzone' ]['ansible_host'] }}"
-          - "{{ hostvars[ 'dc_sandbox' ]['ansible_host'] }}"
 
 - name: provision the sandbox domain controller child trust
   hosts: dc_sandbox
@@ -43,6 +42,16 @@
     - name: Set fact for domain_joined
       set_fact:
         domain_joined: true
+
+- name: set the DNS server to include both domain controllers
+  hosts: dc_sandbox,dc_pwnzone
+  tasks:
+    - name: set the DNS server to both domain controllers
+      win_dns_client:
+        adapter_names: '*'
+        ipv4_addresses:
+          - "{{ hostvars[ 'dc_pwnzone' ]['ansible_host'] }}"
+          - "{{ hostvars[ 'dc_sandbox' ]['ansible_host'] }}"
 
 
 - name: set the DNS servers to establish tree-root trust
@@ -215,7 +224,19 @@
   roles:
     - winlogbeat
 
-# 4. Create a scheduled task to load a privileged user's hash into memory on WS01
+# 4. Configure Kibana index patterns and dashboards for log analysis
+- name: Configure Kibana for Windows Event Log Analysis
+  hosts: linux_servers
+  roles:
+    - kibana_config
+
+# 5. Install Wireshark on all Windows hosts for network analysis
+- name: Install Wireshark on Windows hosts
+  hosts: windows
+  roles:
+    - wireshark
+
+# 6. Create a scheduled task to load a privileged user's hash into memory on WS01
 - name: Schedule task for privileged user hash on workstation
   hosts: ws01
   vars:
@@ -226,5 +247,11 @@
     privileged_domain: "sandbox.pwnzone.lab"
   roles:
     - privileged_user_task
+
+# 7. Enable PowerShell Script Block Logging (FINAL STEP - may break WinRM connectivity)
+- name: Enable PowerShell Script Block Logging on Windows hosts
+  hosts: windows
+  roles:
+    - powershell_logging
 
 # --- LAT MOVE WORKSHOP MODS END HERE ---

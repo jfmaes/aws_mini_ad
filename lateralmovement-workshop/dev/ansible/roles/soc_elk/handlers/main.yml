@@ -11,7 +11,7 @@
     state: restarted
   become: yes
 
-- name: Restart logstash
+- name: Restart Logstash
   systemd:
     name: logstash
     state: restarted

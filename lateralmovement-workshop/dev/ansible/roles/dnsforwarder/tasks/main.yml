@@ -1,5 +1,5 @@
 - name: Add conditional forwarder zones
-  community.windows.win_dns_zone:
+  ansible.windows.win_dns_zone:
     name: "{{ item.name }}"
     type: forwarder
     dns_servers: "{{ item.dns_servers }}"

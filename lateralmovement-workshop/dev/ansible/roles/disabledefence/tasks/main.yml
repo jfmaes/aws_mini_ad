@@ -6,7 +6,7 @@
     type: dword
 
 - name: Disable firewall for Domain, Public and Private profiles
-  win_firewall:
+  ansible.windows.win_firewall:
     state: disabled
     profiles:
       - Domain
@@ -58,13 +58,60 @@
     data: 1
     type: dword
 
+- name: Check if RealTime Monitoring is already disabled
+  ansible.windows.win_powershell:
+    script: |
+      try {
+        $preference = Get-MpPreference -ErrorAction Stop
+        if ($preference.DisableRealtimeMonitoring -eq $true) {
+          "already_disabled"
+        } else {
+          "enabled"
+        }
+      } catch {
+        "defender_not_available"
+      }
+  register: realtime_status
+  failed_when: false
+
 - name: Disable RealTime Monitoring
-  win_command:
-    powershell.exe -command "Set-MpPreference -DisableRealtimeMonitoring $true"
+  ansible.windows.win_powershell:
+    script: |
+      try {
+        Set-MpPreference -DisableRealtimeMonitoring $true
+        "success"
+      } catch {
+        throw "Failed to disable real-time monitoring: $($_.Exception.Message)"
+      }
+  when: realtime_status.output[0] == "enabled"
+
+- name: Check current exclusion paths
+  ansible.windows.win_powershell:
+    script: |
+      try {
+        $preference = Get-MpPreference -ErrorAction Stop
+        $exclusions = $preference.ExclusionPath
+        if ($exclusions -contains "C:\") {
+          "already_excluded"
+        } else {
+          "not_excluded"
+        }
+      } catch {
+        "defender_not_available"
+      }
+  register: exclusion_status
+  failed_when: false
 
 - name: Adding C:\ to the exclusions of defender
-  win_command:
-    powershell.exe -command "Set-MpPreference -ExclusionPath \"C:\\""
+  ansible.windows.win_powershell:
+    script: |
+      try {
+        Set-MpPreference -ExclusionPath "C:\"
+        "success"
+      } catch {
+        throw "Failed to add C:\ exclusion: $($_.Exception.Message)"
+      }
+  when: exclusion_status.output[0] == "not_excluded"
 
 - name: reboot
   win_reboot:

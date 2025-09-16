@@ -1,9 +1,10 @@
 # Passwords for ELK stack components (for workshop simplicity)
 # In a real environment, use Ansible Vault or other secrets management!
-#elastic_certs_password: "WorkshopCertsPass!" # Password for the p12 cert bundles
-#elastic_user_password: "ElkSecur3!"
-#kibana_user_password: "Kiban@Adm1n!"
-#logstash_user_password: "Logst@shSvc!"
-#beats_user_password: "BeatSvcPass!" # Needed for elasticsearch-setup-passwords but not directly used by winlogbeat for logstash output
-#apm_user_password: "ApmSvcPass!"
-#remote_monitoring_user_password: "Monit0rPass!"
+elastic_certs_password: "WorkshopCertsPass!" # Password for the p12 cert bundles
+elastic_user_password: "ElkSecur3!"
+kibana_user_password: "Kiban@Adm1n!"
+logstash_user_password: "Logst@shSvc!"
+beats_user_password: "BeatSvcPass!" # Needed for elasticsearch-setup-passwords but not directly used by winlogbeat for logstash output
+apm_user_password: "ApmSvcPass!"
+remote_monitoring_user_password: "Monit0rPass!"
+winlogbeat_writer_password: "WinlogbeatWrite123!" # Dedicated user for Winlogbeat with minimal permissions

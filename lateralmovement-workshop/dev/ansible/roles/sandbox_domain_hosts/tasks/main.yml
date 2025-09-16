@@ -13,7 +13,7 @@
   when: result.changed
 
 - name: "Add system to domain {{ domain_fqdn }}"
-  win_domain_membership:
+  microsoft.ad.membership:
     dns_domain_name: "{{ domain_fqdn }}"
     hostname: "{{ inventory_hostname }}"
     domain_admin_user: "administrator@{{ domain_fqdn }}"

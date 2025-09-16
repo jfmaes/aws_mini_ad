@@ -1,29 +1,4 @@
-
-# 2. Setup the ELK Stack on the SOC machine
-# Passwords are sourced globally from dev/ansible/group_vars/all.yml
-- name: Setup ELK Stack on SOC machine
-  hosts: soc
-  roles:
-    - soc_elk
-
-# 3. Install and configure Winlogbeat on all Windows hosts
-# This role relies on the SOC machine having generated its CA certificate first.
-- name: Install and Configure Winlogbeat on Windows hosts
+- name: Deploy Updated Sysmon Config Only
   hosts: windows
-  vars:
-    soc_machine_ip: "{{ hostvars['soc']['ansible_host'] }}"
-    # elastic_user_password is sourced globally from group_vars/all.yml for Winlogbeat setup command
   roles:
-    - winlogbeat
-
-# 4. Create a scheduled task to load a privileged user's hash into memory on WS01
-- name: Schedule task for privileged user hash on workstation
-  hosts: ws01
-  vars:
-    # Ensure this user is a Domain Admin in sandbox.pwnzone.lab for the PtH/OpTH demos
-    privileged_username: "adm_asnyder"
-    # IMPORTANT: Replace with the actual password for adm_asnyder from your ad_data_sandbox.pwnzone.lab.yml
-    privileged_password: "5u8p19T1jVqkW6K"
-    privileged_domain: "sandbox.pwnzone.lab"
-  roles:
-    - privileged_user_task
+    - sysmon

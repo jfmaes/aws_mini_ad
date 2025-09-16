@@ -27,7 +27,7 @@
     var: ad
 
 - name: "ensure A record is present"
-  win_dns_record:
+  ansible.windows.win_dns_record:
     name: "{{ dc_hostname }}"
     zone: "{{ dns_dom_name }}"
     type: A

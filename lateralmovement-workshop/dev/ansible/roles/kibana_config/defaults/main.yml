@@ -1,0 +1,45 @@
+# Kibana Configuration Role Defaults
+kibana_url: "https://{{ ansible_host }}:5601"
+kibana_api_timeout: 300
+kibana_ready_retries: 30
+kibana_ready_delay: 10
+
+# Index pattern configuration
+kibana_index_patterns:
+  - name: "winlogbeat-*"
+    title: "winlogbeat-*"
+    time_field: "@timestamp"
+    set_as_default: true
+
+# Saved searches configuration
+kibana_saved_searches:
+  - id: "windows-events-search"
+    title: "Windows Events"
+    description: "All Windows Events from Winlogbeat"
+    index_pattern: "winlogbeat-*"
+    columns: ["@timestamp", "host.name", "winlog.channel", "winlog.event_id", "message"]
+    query: "*"
+    
+  - id: "sysmon-events-search"
+    title: "Sysmon Events"
+    description: "Sysmon Events for Process Monitoring"
+    index_pattern: "winlogbeat-*"
+    columns: ["@timestamp", "host.name", "winlog.event_id", "winlog.event_data.Image", "winlog.event_data.CommandLine", "winlog.event_data.User"]
+    query: 'winlog.channel:"Microsoft-Windows-Sysmon/Operational"'
+    
+  - id: "security-events-search"
+    title: "Security Events"
+    description: "Windows Security Log Events"
+    index_pattern: "winlogbeat-*"
+    columns: ["@timestamp", "host.name", "winlog.event_id", "winlog.event_data.SubjectUserName", "winlog.event_data.TargetUserName", "winlog.event_data.LogonType"]
+    query: 'winlog.channel:"Security"'
+
+# Dashboard configuration
+kibana_dashboards:
+  - id: "windows-security-dashboard"
+    title: "Windows Security Events"
+    description: "Dashboard for Windows Event Log Analysis"
+    searches:
+      - "windows-events-search"
+      - "sysmon-events-search"
+      - "security-events-search"

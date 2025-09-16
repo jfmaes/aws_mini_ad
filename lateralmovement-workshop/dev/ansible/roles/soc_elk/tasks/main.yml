@@ -197,6 +197,80 @@
   become: yes
 
 # --- CERTS (only if not yet secure) ---
+- name: Create elk-certs group for shared certificate access
+  group:
+    name: elk-certs
+    state: present
+  become: yes
+
+- name: Add elasticsearch, logstash, and kibana users to elk-certs group
+  user:
+    name: "{{ item }}"
+    groups: elk-certs
+    append: yes
+  become: yes
+  loop:
+    - elasticsearch
+    - logstash
+    - kibana
+
+- name: Ensure Logstash certs directory exists
+  file:
+    path: /etc/logstash/certs
+    state: directory
+    owner: logstash
+    group: elk-certs
+    mode: '0750'
+  become: yes
+
+- name: Copy existing P12 certificate for Logstash use
+  copy:
+    src: /etc/elasticsearch/certs/elastic-stack-certs.p12
+    dest: /etc/logstash/certs/elastic-stack-certs.p12
+    remote_src: yes
+    owner: logstash
+    group: elk-certs
+    mode: '0640'
+  become: yes
+
+- name: Extract certificate from P12 keystore for Logstash beats input
+  command: >
+    openssl pkcs12 -in /etc/logstash/certs/elastic-stack-certs.p12
+    -clcerts -nokeys -out /etc/logstash/certs/logstash-server.crt
+    -passin pass:"{{ elastic_certs_password }}"
+  args:
+    creates: /etc/logstash/certs/logstash-server.crt
+  become: yes
+  register: logstash_cert_extract
+
+- name: Extract private key from P12 keystore for Logstash beats input
+  command: >
+    openssl pkcs12 -in /etc/logstash/certs/elastic-stack-certs.p12
+    -nocerts -nodes -out /etc/logstash/certs/logstash-server.key
+    -passin pass:"{{ elastic_certs_password }}"
+  args:
+    creates: /etc/logstash/certs/logstash-server.key
+  become: yes
+  register: logstash_key_extract
+
+- name: Set permissions on extracted Logstash certificate
+  file:
+    path: /etc/logstash/certs/logstash-server.crt
+    owner: logstash
+    group: logstash
+    mode: '0644'
+  become: yes
+  when: logstash_cert_extract.changed
+
+- name: Set permissions on extracted Logstash private key
+  file:
+    path: /etc/logstash/certs/logstash-server.key
+    owner: logstash
+    group: logstash
+    mode: '0600'
+  become: yes
+  when: logstash_key_extract.changed
+
 - name: Certificate Setup (only if not secure)
   block:
     - name: Create certs dir
@@ -204,7 +278,7 @@
         path: /etc/elasticsearch/certs
         state: directory
         owner: elasticsearch
-        group: elasticsearch
+        group: elk-certs
         mode: '0750'
       become: yes
 
@@ -230,21 +304,6 @@
       become: yes
       when: (ca_gen_result is defined and ca_gen_result.changed) or not ca_crt_exists
 
-    - name: Generate Elasticsearch Node Certificate (P12) signed by our CA
-      command: >
-        /usr/share/elasticsearch/bin/elasticsearch-certutil cert
-        --ca-cert /etc/elasticsearch/certs/ca/ca.crt
-        --ca-key /etc/elasticsearch/certs/ca/ca.key
-        --ca-pass ""
-        --out /etc/elasticsearch/certs/elastic-stack-certs.p12
-        --pass {{ elastic_certs_password }}
-        --ip {{ es_host }},127.0.0.1
-        --dns {{ ansible_hostname }},localhost
-      args:
-        creates: /etc/elasticsearch/certs/elastic-stack-certs.p12
-      register: cert_gen_result
-      become: yes
-      when: not p12_exists
 
     - name: Move ca.crt to final location and set permissions
       copy:
@@ -255,14 +314,14 @@
         group: root
         mode: '0644'
       become: yes
-      when: cert_gen_result is defined and cert_gen_result.changed
+      when: (cert_gen_result is defined and cert_gen_result.changed) or not ca_crt_exists
 
     - name: Set correct permissions on Node P12 certificate
       file:
         path: /etc/elasticsearch/certs/elastic-stack-certs.p12
         owner: elasticsearch
-        group: elasticsearch
-        mode: '0660'
+        group: elk-certs
+        mode: '0640'
       become: yes
       when: p12_exists or (cert_gen_result is defined and cert_gen_result.changed)
 
@@ -356,11 +415,12 @@
             dict(
               es_password_lines | default([])
               | map('regex_replace', '^PASSWORD\\s+(\\S+)\\s+=\\s+(.+)$', '\\1,\\2')
+              | select('match', '.+,.+')
               | map('split', ',')
               | list
             )
           }}
-      when: (not passwords_marker.stat.exists) and (auto_passwords_result.rc == 0) and (es_password_lines is defined)
+      when: (not passwords_marker.stat.exists) and (auto_passwords_result.rc == 0) and (es_password_lines is defined) and (es_password_lines | length > 0)
 
     - name: Persist parsed passwords (YAML)
       copy:
@@ -414,15 +474,37 @@
         temp_admin_password: "{{ lookup('password', '/dev/null', chars='ascii_letters,digits', length=20) }}"
       when: auto_bootstrap_failed | default(false)
 
-    - name: Create temp superuser in file realm (idempotent)
-      command: >
+    - name: Remove existing temp admin user if exists
+      shell: /usr/share/elasticsearch/bin/elasticsearch-users userdel es_temp_admin
+      become: yes
+      ignore_errors: yes
+      when: auto_bootstrap_failed | default(false)
+
+    - name: Create temp superuser in file realm (fresh)
+      shell: >
         /usr/share/elasticsearch/bin/elasticsearch-users useradd es_temp_admin
         -p "{{ temp_admin_password }}" -r superuser
-      args:
-        creates: /etc/elasticsearch/.es_temp_admin_created
       register: temp_admin_create
       become: yes
       when: auto_bootstrap_failed | default(false)
+
+    - name: Restart ES after user creation to reload file realm
+      systemd:
+        name: elasticsearch
+        state: restarted
+      become: yes
+      when: auto_bootstrap_failed | default(false) and (temp_admin_create is defined and temp_admin_create.rc == 0)
+
+    - name: Wait for ES after user creation restart
+      uri:
+        url: "{{ es_api_url_https }}/"
+        validate_certs: no
+        status_code: [200, 401]
+      register: es_ready_after_user
+      until: es_ready_after_user.status in [200, 401]
+      retries: 30
+      delay: 5
+      when: auto_bootstrap_failed | default(false) and (temp_admin_create is defined and temp_admin_create.rc == 0)
 
     - name: Mark temp admin created
       file:
@@ -536,6 +618,40 @@
         body: { password: "{{ remote_monitoring_user_password }}" }
         status_code: 200
 
+    - name: Create beats_writer role for Winlogbeat
+      uri:
+        url: "{{ es_api_url_https }}/_security/role/beats_writer"
+        method: PUT
+        user: "elastic"
+        password: "{{ elastic_current_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        headers: { Content-Type: "application/json" }
+        body_format: json
+        body:
+          cluster: ["monitor", "manage_index_templates", "manage_ilm"]
+          indices:
+            - names: ["winlogbeat-*", "filebeat-*", "metricbeat-*", "heartbeat-*", "auditbeat-*"]
+              privileges: ["write", "create", "create_index", "manage", "manage_ilm"]
+        status_code: [200, 201]
+
+    - name: Create winlogbeat_writer user
+      uri:
+        url: "{{ es_api_url_https }}/_security/user/winlogbeat_writer"
+        method: PUT
+        user: "elastic"
+        password: "{{ elastic_current_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        headers: { Content-Type: "application/json" }
+        body_format: json
+        body:
+          password: "{{ winlogbeat_writer_password }}"
+          roles: ["beats_writer"]
+          full_name: "Winlogbeat Writer User"
+          email: "winlogbeat@workshop.local"
+        status_code: [200, 201]
+
     - name: Mark passwords as set
       file:
         path: /etc/elasticsearch/.passwords_set
@@ -573,6 +689,7 @@
     name: kibana
     state: present
   become: yes
+
 
 - name: Configure Kibana with TLS and Authentication
   template:
@@ -615,29 +732,52 @@
     mode: '0755'
   become: yes
 
-- name: Remove any existing environment file to prevent duplicates
+- name: Remove existing Logstash environment file to prevent duplicates
   file:
     path: /etc/sysconfig/logstash
     state: absent
   become: yes
 
-- name: Configure Logstash keystore password environment (single entry - simple ASCII password)
+- name: Configure Logstash keystore password environment
   copy:
-    content: 'LOGSTASH_KEYSTORE_PASS=password123\n'
+    content: "LOGSTASH_KEYSTORE_PASS=password123"
     dest: /etc/sysconfig/logstash
     owner: root
     group: root
-    mode: '0600'
+    mode: '0644'
+  become: yes
+
+- name: Add keystore password to default Logstash environment file
+  lineinfile:
+    path: /etc/default/logstash
+    line: "LOGSTASH_KEYSTORE_PASS=password123"
+    regexp: "^LOGSTASH_KEYSTORE_PASS="
+    create: yes
+    owner: root
+    group: root
+    mode: '0644'
   become: yes
 
 - name: Validate environment file has single keystore password entry
   shell: |
+    # Check for exactly one LOGSTASH_KEYSTORE_PASS entry
     if [ $(grep -c "LOGSTASH_KEYSTORE_PASS" /etc/sysconfig/logstash) -ne 1 ]; then
       echo "ERROR: Multiple or missing LOGSTASH_KEYSTORE_PASS entries found"
       exit 1
     fi
+    # Check for empty password value
     if grep -q "LOGSTASH_KEYSTORE_PASS=$" /etc/sysconfig/logstash; then
       echo "ERROR: Empty LOGSTASH_KEYSTORE_PASS value found"
+      exit 1
+    fi
+    # Check for malformed entries with newlines or special characters
+    if grep -q "LOGSTASH_KEYSTORE_PASS=.*\\\\n" /etc/sysconfig/logstash; then
+      echo "ERROR: LOGSTASH_KEYSTORE_PASS contains literal \\n characters"
+      exit 1
+    fi
+    # Verify file has exactly one line
+    if [ $(wc -l < /etc/sysconfig/logstash) -ne 1 ]; then
+      echo "ERROR: Environment file should contain exactly one line"
       exit 1
     fi
     echo "Environment file validation passed"
@@ -658,38 +798,53 @@
   become: yes
   register: logstash_keystore_create_result
 
-- name: Add LS_PASSWORD to Logstash keystore
+- name: Check if LS_PASSWORD exists in keystore
   shell: >
-    echo "{{ logstash_user_password }}" | /usr/share/logstash/bin/logstash-keystore --path.settings /etc/logstash add LS_PASSWORD --stdin
+    /usr/share/logstash/bin/logstash-keystore --path.settings /etc/logstash list | grep -q "ls_password"
   environment:
     LOGSTASH_KEYSTORE_PASS: 'password123'
   become: yes
-  when: logstash_keystore_create_result.changed
+  register: ls_password_check
+  failed_when: false
+  changed_when: false
+
+- name: Add LS_PASSWORD to Logstash keystore
+  shell: >
+    echo "{{ winlogbeat_writer_password }}" | /usr/share/logstash/bin/logstash-keystore --path.settings /etc/logstash add LS_PASSWORD --stdin
+  environment:
+    LOGSTASH_KEYSTORE_PASS: 'password123'
+  become: yes
+  when: ls_password_check.rc != 0
   register: logstash_keystore_add_result
   changed_when: logstash_keystore_add_result.rc == 0
   failed_when: logstash_keystore_add_result.rc != 0
 
-- name: Ensure CA certificate directory has correct permissions
+- name: Ensure CA certificate directory has correct permissions for ELK stack
   file:
     path: /etc/elasticsearch/certs
     state: directory
-    mode: '0755'
+    owner: elasticsearch
+    group: elk-certs
+    mode: '0750'
   become: yes
 
-- name: Ensure CA certificate is accessible to Logstash
+- name: Ensure CA certificate is accessible to all ELK components
   file:
     path: /etc/elasticsearch/certs/ca.crt
+    owner: root
+    group: elk-certs
+    mode: '0644'
+  become: yes
+
+- name: Create Logstash pipeline configuration for Winlogbeat
+  template:
+    src: winlogbeat-pipeline.conf.j2
+    dest: /etc/logstash/conf.d/winlogbeat-pipeline.conf
     owner: root
     group: root
     mode: '0644'
   become: yes
-
-- name: Configure Logstash pipeline for Winlogbeat with TLS and auth
-  template:
-    src: winlogbeat-pipeline.conf.j2
-    dest: /etc/logstash/conf.d/winlogbeat-pipeline.conf
-  notify: Restart logstash
-  become: yes
+  notify: Restart Logstash
 
 - name: Ensure Logstash pipeline dir exists
   file:

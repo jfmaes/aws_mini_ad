@@ -1,0 +1,21 @@
+---
+dependencies:
+  - role: soc_elk
+
+galaxy_info:
+  author: Workshop Team
+  description: Configures Kibana index patterns, saved searches, and dashboards for Windows event log analysis
+  company: Workshop
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+  galaxy_tags:
+    - kibana
+    - elasticsearch
+    - logging
+    - windows
+    - security
