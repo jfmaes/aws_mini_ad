@@ -3,8 +3,12 @@ variable "aws_region" {
   default = "us-east-1"
 }
 
+variable "ami_owner" {
+  type    = string
+  default = "201554634916"
+}
 
 variable "lab_version_tag" {
   type    = string
-  default = "v0.1"
+  default = "v0.2"
 }

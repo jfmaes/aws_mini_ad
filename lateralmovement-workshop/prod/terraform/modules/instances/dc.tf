@@ -1,3 +1,6 @@
+# OPTIONAL: Uncomment to deploy PWNZONE main domain controller
+# Participants can enable this for advanced multi-domain scenarios
+/*
 resource "aws_instance" "dc_PWNZONE" {
   ami           = data.aws_ami.dc_pwnzone.id
   instance_type = var.instance_type
@@ -20,3 +23,4 @@ resource "aws_network_interface_sg_attachment" "dc_PWNZONE_attachment" {
   security_group_id    = var.lab_security_group_id
   network_interface_id = aws_instance.dc_PWNZONE.primary_network_interface_id
 }
+*/

@@ -29,6 +29,8 @@ module "instances" {
  private_subnet_TREASUREISLAND_id = module.vpc.private_subnet_TREASUREISLAND_id
  key_pair_name = module.vpc.key_pair_name
  lab_security_group_id  = module.security_groups.lab_security_group_id
+ lab_version_tag = var.lab_version_tag
+ ami_owner = var.ami_owner
 }
 
 module "vpn"{

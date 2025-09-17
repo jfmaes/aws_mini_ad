@@ -12,6 +12,8 @@ data "aws_ami" "clean_server2022_base" {
 
 //AMI SEARCHER LOGIC
 
+# OPTIONAL: Uncomment when enabling PWNZONE main DC
+/*
 data "aws_ami" "dc_pwnzone" {
   most_recent = true
   filter {
@@ -20,7 +22,7 @@ data "aws_ami" "dc_pwnzone" {
   }
   owners = [var.ami_owner]
 }
-
+*/
 
 data "aws_ami" "dc_sandbox" {
   most_recent = true
@@ -31,6 +33,8 @@ data "aws_ami" "dc_sandbox" {
   owners = [var.ami_owner]
 }
 
+# OPTIONAL: Uncomment when enabling TREASUREISLAND DC
+/*
 data "aws_ami" "dc_treasureisland" {
   most_recent = true
   filter {
@@ -39,12 +43,22 @@ data "aws_ami" "dc_treasureisland" {
   }
   owners = [var.ami_owner]
 }
+*/
 
 data "aws_ami" "ws01_sandbox" {
   most_recent = true
   filter {
     name   = "name"
     values = ["AMI-SEC565-ws01-sandbox-PWNZONE*-${var.lab_version_tag}"]
+  }
+  owners = [var.ami_owner]
+}
+
+data "aws_ami" "soc_machine" {
+  most_recent = true
+  filter {
+    name   = "name"
+    values = ["AMI-SEC565-SOC-${var.lab_version_tag}"]
   }
   owners = [var.ami_owner]
 }

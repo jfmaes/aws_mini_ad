@@ -1,3 +1,6 @@
+# OPTIONAL: Uncomment to deploy TREASUREISLAND domain controller
+# Participants can enable this for advanced multi-domain scenarios
+/*
 resource "aws_instance" "dc_treasureisland" {
   ami           = data.aws_ami.dc_treasureisland.id
   instance_type = var.instance_type
@@ -20,3 +23,4 @@ resource "aws_network_interface_sg_attachment" "dc_treasure_attachment" {
   security_group_id    = var.lab_security_group_id
   network_interface_id = aws_instance.dc_treasureisland.primary_network_interface_id
 }
+*/
