@@ -7,6 +7,8 @@ The dev environment starts from bare bones clean windows AMI base images and req
 The prod environment spins up a preprovisioned (snapshotted) range that was provisioned with the ansible playbooks in the dev folder. 
 Several helper scripts are also available to create snapshots yourself, make AMI's public and duplicate them accross regions. 
 
+This repository now houses two workshops, one lateral movement detection workshop and one privesc workshop. folder structure is simmilar between the two workshops.
+
 
 To spin up the AWS AD environment you can use 
 
@@ -17,11 +19,13 @@ python3 manager.py deploy -r <your region> -t <your version tag>
 At this point in time the following regions are supported:
 us-east-1,us-west-1,eu-west-1 
 
-The current version tag is v0.1
+The version tag for the privesc workshop is v0.1
+The version tag for the lateral movement workshop is v0.2
 
 
 There is a walkthrough with some demonstration attack paths in this range using Empire available here: <br>
-https://logout.gitbook.io/ad-privesc-with-empire
+Privesc : https://logout.gitbook.io/ad-privesc-with-empire
+Lateral Movement: https://logout.gitbook.io/lateral-movement-in-ad-with-empire
 
 
 The lab environment consists of three domains:
