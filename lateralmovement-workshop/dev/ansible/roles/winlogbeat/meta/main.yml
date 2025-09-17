@@ -1,0 +1,22 @@
+---
+dependencies:
+  - role: soc_elk
+    when: inventory_hostname in groups['linux_servers']
+
+galaxy_info:
+  author: Security Team
+  description: Installs and configures Winlogbeat for Windows event log forwarding to ELK stack
+  company: Workshop
+  license: MIT
+  min_ansible_version: 2.9
+  platforms:
+    - name: Windows
+      versions:
+        - 2016
+        - 2019
+        - 2022
+  galaxy_tags:
+    - logging
+    - security
+    - winlogbeat
+    - elk

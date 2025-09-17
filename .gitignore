@@ -33,6 +33,55 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+# SSH Keys (anywhere in the repository)
+**/ssh_key*
+**/id_rsa*
+**/id_ed25519*
+**/id_ecdsa*
+**/*.pem
+**/*.key
+**/authorized_keys
 SEC565-MINIRANGE/prod/files/ssh_key*
-SEC565-MINIRANGE/prod/files/ssh_key*
+
+# Virtual Environment files (Python, Node.js, etc.)
+**/venv/
+**/env/
+**/.venv/
+**/.env/
+**/virtualenv/
+**/node_modules/
+**/.virtualenv/
+**/ENV/
+**/env.bak/
+**/venv.bak/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.Python
+**/pip-log.txt
+**/pip-delete-this-directory.txt
+**/.tox/
+**/.coverage
+**/.pytest_cache/
+# Python virtual environment structure
+**/bin/
+**/lib/
+**/lib64
+**/include/
+**/pyvenv.cfg
+**/site-packages/
+
+# Helper scripts (development/testing utilities)
+**/helpers/
+**/helper_scripts/
+**/dev_helpers/
+**/test_helpers/
+**/utils/dev_*
+**/scripts/dev_*
+
+# Student files
 *student.ovpn*
+
+

@@ -1,0 +1,903 @@
+---
+- name: Set ES host
+  set_fact:
+    es_host: "{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}"
+
+- name: Set ES API URLs
+  set_fact:
+    es_api_url_http: "http://{{ es_host }}:9200"
+    es_api_url_https: "https://{{ es_host }}:9200"
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+  become: yes
+
+- name: Install Java (OpenJDK 11) for Elasticsearch
+  apt:
+    name: openjdk-11-jdk
+    state: present
+  become: yes
+
+- name: Install apt-transport-https and other dependencies
+  apt:
+    name:
+      - apt-transport-https
+      - curl
+      - gnupg2
+      - ufw
+      - unzip
+    state: present
+  become: yes
+
+- name: Import Elasticsearch GPG key
+  apt_key:
+    url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+    state: present
+  become: yes
+
+- name: Add Elasticsearch repo for 7.x packages
+  apt_repository:
+    repo: "deb https://artifacts.elastic.co/packages/7.x/apt stable main"
+    state: present
+    filename: elastic-7.x
+  become: yes
+
+- name: Install Elasticsearch
+  apt:
+    name: elasticsearch
+    state: present
+  become: yes
+
+# Create directories AFTER package install (ensures elasticsearch user exists)
+- name: Create Elasticsearch data directory and set permissions
+  file:
+    path: /var/lib/elasticsearch
+    state: directory
+    owner: elasticsearch
+    group: elasticsearch
+    mode: '0750'
+  become: yes
+
+- name: Create Elasticsearch log directory and set permissions
+  file:
+    path: /var/log/elasticsearch
+    state: directory
+    owner: elasticsearch
+    group: elasticsearch
+    mode: '0750'
+  become: yes
+
+- name: Ensure /usr/share/elasticsearch/logs directory exists and has correct permissions
+  file:
+    path: /usr/share/elasticsearch/logs
+    state: directory
+    owner: elasticsearch
+    group: elasticsearch
+    mode: '0755'
+  become: yes
+
+# Ensure keystore exists and has correct permissions
+- name: Check if Elasticsearch keystore exists
+  stat:
+    path: /etc/elasticsearch/elasticsearch.keystore
+  register: keystore_stat
+
+- name: Ensure /etc/elasticsearch directory has correct permissions
+  file:
+    path: /etc/elasticsearch
+    state: directory
+    owner: elasticsearch
+    group: elasticsearch
+    mode: '0755'
+  become: yes
+
+- name: Create Elasticsearch keystore if missing
+  command: /usr/share/elasticsearch/bin/elasticsearch-keystore create
+  args:
+    creates: /etc/elasticsearch/elasticsearch.keystore
+  become: yes
+  when: not keystore_stat.stat.exists
+
+- name: Ensure keystore has correct permissions
+  file:
+    path: /etc/elasticsearch/elasticsearch.keystore
+    owner: elasticsearch
+    group: elasticsearch
+    mode: '0660'
+  become: yes
+
+# --- Checks ---
+- name: Check Elasticsearch HTTP status
+  uri:
+    url: "{{ es_api_url_http }}"
+    method: GET
+    status_code: [200, 302, -1]
+    validate_certs: no
+    follow_redirects: no
+  register: es_http_status
+  ignore_errors: true
+
+- name: Check Elasticsearch HTTPS status (for already secured instances)
+  uri:
+    url: "{{ es_api_url_https }}"
+    method: GET
+    status_code: [200, 401, -1]
+    validate_certs: no
+    follow_redirects: no
+  register: es_https_status
+  ignore_errors: true
+
+- name: Stat check for P12 certificate bundle
+  stat:
+    path: /etc/elasticsearch/certs/elastic-stack-certs.p12
+  register: p12_file_stat
+
+- name: Stat check for CA certificate
+  stat:
+    path: /etc/elasticsearch/certs/ca.crt
+  register: ca_crt_file_stat
+
+- name: Set state flags
+  set_fact:
+    certs_exist_and_secure: "{{ es_https_status.status in [200, 401] }}"
+    p12_exists: "{{ p12_file_stat.stat.exists }}"
+    ca_crt_exists: "{{ ca_crt_file_stat.stat.exists }}"
+
+
+- name: Apply minimal network configuration for initial startup
+  template:
+    src: elasticsearch_pre_security.yml.j2
+    dest: /etc/elasticsearch/elasticsearch.yml
+    owner: root
+    group: elasticsearch
+    mode: '0660'
+  become: yes
+  when: not certs_exist_and_secure # Only apply if ES is not yet secure
+
+# --- Start & initial wait (pre-security) ---
+- name: Start Elasticsearch if not running
+  systemd:
+    name: elasticsearch
+    state: started
+    enabled: yes
+  become: yes
+  when: not certs_exist_and_secure
+
+- name: Wait for 9200 TCP {{ es_host }}
+  wait_for:
+    host: "{{ es_host }}"
+    port: 9200
+    delay: 2
+    timeout: 120
+  when: not certs_exist_and_secure
+
+- name: Wait for HTTP (pre-security)
+  uri:
+    url: "{{ es_api_url_http }}"
+    method: GET
+    status_code: [200, 302]
+    validate_certs: no
+    follow_redirects: no
+  register: es_initial_http_wait
+  until: es_initial_http_wait.status in [200, 302]
+  retries: 30
+  delay: 5
+  when: not certs_exist_and_secure and es_http_status.status == -1
+
+# JVM heap drop-in
+- name: Configure Elasticsearch JVM heap size via drop-in template
+  template:
+    src: custom_heap.options.j2
+    dest: /etc/elasticsearch/jvm.options.d/custom_heap.options
+    owner: root
+    group: elasticsearch
+    mode: '0644'
+  notify: Restart elasticsearch
+  become: yes
+
+# --- CERTS (only if not yet secure) ---
+- name: Create elk-certs group for shared certificate access
+  group:
+    name: elk-certs
+    state: present
+  become: yes
+
+- name: Add elasticsearch, logstash, and kibana users to elk-certs group
+  user:
+    name: "{{ item }}"
+    groups: elk-certs
+    append: yes
+  become: yes
+  loop:
+    - elasticsearch
+    - logstash
+    - kibana
+
+- name: Ensure Logstash certs directory exists
+  file:
+    path: /etc/logstash/certs
+    state: directory
+    owner: logstash
+    group: elk-certs
+    mode: '0750'
+  become: yes
+
+- name: Copy existing P12 certificate for Logstash use
+  copy:
+    src: /etc/elasticsearch/certs/elastic-stack-certs.p12
+    dest: /etc/logstash/certs/elastic-stack-certs.p12
+    remote_src: yes
+    owner: logstash
+    group: elk-certs
+    mode: '0640'
+  become: yes
+
+- name: Extract certificate from P12 keystore for Logstash beats input
+  command: >
+    openssl pkcs12 -in /etc/logstash/certs/elastic-stack-certs.p12
+    -clcerts -nokeys -out /etc/logstash/certs/logstash-server.crt
+    -passin pass:"{{ elastic_certs_password }}"
+  args:
+    creates: /etc/logstash/certs/logstash-server.crt
+  become: yes
+  register: logstash_cert_extract
+
+- name: Extract private key from P12 keystore for Logstash beats input
+  command: >
+    openssl pkcs12 -in /etc/logstash/certs/elastic-stack-certs.p12
+    -nocerts -nodes -out /etc/logstash/certs/logstash-server.key
+    -passin pass:"{{ elastic_certs_password }}"
+  args:
+    creates: /etc/logstash/certs/logstash-server.key
+  become: yes
+  register: logstash_key_extract
+
+- name: Set permissions on extracted Logstash certificate
+  file:
+    path: /etc/logstash/certs/logstash-server.crt
+    owner: logstash
+    group: logstash
+    mode: '0644'
+  become: yes
+  when: logstash_cert_extract.changed
+
+- name: Set permissions on extracted Logstash private key
+  file:
+    path: /etc/logstash/certs/logstash-server.key
+    owner: logstash
+    group: logstash
+    mode: '0600'
+  become: yes
+  when: logstash_key_extract.changed
+
+- name: Certificate Setup (only if not secure)
+  block:
+    - name: Create certs dir
+      file:
+        path: /etc/elasticsearch/certs
+        state: directory
+        owner: elasticsearch
+        group: elk-certs
+        mode: '0750'
+      become: yes
+
+    - name: Generate Elasticsearch CA (PEM, zipped)
+      command: >
+        /usr/share/elasticsearch/bin/elasticsearch-certutil ca
+        --pem
+        --out /etc/elasticsearch/certs/ca-bundle.zip
+        --pass ""
+      args:
+        creates: /etc/elasticsearch/certs/ca-bundle.zip
+      register: ca_gen_result
+      become: yes
+      when: not ca_crt_exists # Use ca_crt_exists as the trigger
+
+    - name: Unarchive the CA bundle to extract ca.crt and ca.key
+      unarchive:
+        src: /etc/elasticsearch/certs/ca-bundle.zip
+        dest: /etc/elasticsearch/certs/
+        remote_src: yes
+        owner: elasticsearch
+        group: elasticsearch
+      become: yes
+      when: (ca_gen_result is defined and ca_gen_result.changed) or not ca_crt_exists
+
+
+    - name: Move ca.crt to final location and set permissions
+      copy:
+        src: /etc/elasticsearch/certs/ca/ca.crt
+        dest: /etc/elasticsearch/certs/ca.crt
+        remote_src: yes
+        owner: root
+        group: root
+        mode: '0644'
+      become: yes
+      when: (cert_gen_result is defined and cert_gen_result.changed) or not ca_crt_exists
+
+    - name: Set correct permissions on Node P12 certificate
+      file:
+        path: /etc/elasticsearch/certs/elastic-stack-certs.p12
+        owner: elasticsearch
+        group: elk-certs
+        mode: '0640'
+      become: yes
+      when: p12_exists or (cert_gen_result is defined and cert_gen_result.changed)
+
+    - name: Configure Elasticsearch with TLS and Security
+      template:
+        src: elasticsearch.yml.j2
+        dest: /etc/elasticsearch/elasticsearch.yml
+      notify: Restart elasticsearch
+      become: yes
+
+    - name: Restart Elasticsearch
+      systemd:
+        name: elasticsearch
+        state: restarted
+        enabled: yes
+      become: yes
+
+    - name: Wait for 9200 TCP post-security
+      wait_for:
+        host: "{{ es_host }}"
+        port: 9200
+        delay: 2
+        timeout: 180
+
+    - name: Wait for HTTPS 401/200 post-security
+      uri:
+        url: "{{ es_api_url_https }}"
+        method: GET
+        validate_certs: no
+        status_code: [200, 401]
+      register: es_secured_status_after_config
+      until: es_secured_status_after_config.status in [200, 401]
+      retries: 30
+      delay: 5
+  when: not certs_exist_and_secure
+
+# --- PASSWORD SETUP (secure path) ---
+- name: Password Setup (runs only if ES is secure)
+  block:
+
+    - name: Ensure HTTPS answers (401/200)
+      uri:
+        url: "{{ es_api_url_https }}"
+        method: GET
+        validate_certs: no
+        status_code: [200, 401]
+      register: es_https_ready
+      until: es_https_ready.status in [200, 401]
+      retries: 30
+      delay: 5
+
+    - name: Check marker
+      stat:
+        path: /etc/elasticsearch/.passwords_set
+      register: passwords_marker
+      become: yes
+
+    # -------- Path A: fresh cluster => use 'auto' --------
+    - name: Run 'auto' to set built-ins (capture output)  # allow rc 78 for already-set
+      command: >
+        /usr/share/elasticsearch/bin/elasticsearch-setup-passwords auto
+        --batch --url "{{ es_api_url_https }}"
+      args:
+        chdir: /usr/share/elasticsearch
+      environment:
+        ES_JAVA_OPTS: "-Xms256m -Xmx512m"
+      register: auto_passwords_result
+      changed_when: auto_passwords_result.rc == 0
+      failed_when: false
+      when: not passwords_marker.stat.exists
+
+    - name: Persist raw 'auto' stdout (even if rc!=0)
+      copy:
+        content: "{{ auto_passwords_result.stdout | default('') }}"
+        dest: /etc/elasticsearch/initial_passwords.out
+        owner: root
+        group: root
+        mode: '0600'
+      become: yes
+      when: not passwords_marker.stat.exists
+
+    - name: Parse 'auto' stdout into map (only if rc==0)
+      set_fact:
+        es_password_lines: "{{ (auto_passwords_result.stdout | default('')).splitlines() | select('match', '^PASSWORD\\s+\\S+\\s+=\\s+.+$') | list }}"
+      when: (not passwords_marker.stat.exists) and (auto_passwords_result.rc == 0)
+
+    - name: Create password map from parsed lines
+      set_fact:
+        es_password_map: >-
+          {{
+            dict(
+              es_password_lines | default([])
+              | map('regex_replace', '^PASSWORD\\s+(\\S+)\\s+=\\s+(.+)$', '\\1,\\2')
+              | select('match', '.+,.+')
+              | map('split', ',')
+              | list
+            )
+          }}
+      when: (not passwords_marker.stat.exists) and (auto_passwords_result.rc == 0) and (es_password_lines is defined) and (es_password_lines | length > 0)
+
+    - name: Persist parsed passwords (YAML)
+      copy:
+        content: "{{ es_password_map | to_nice_yaml }}"
+        dest: /etc/elasticsearch/initial_passwords.yml
+        owner: root
+        group: root
+        mode: '0600'
+      become: yes
+      when: (not passwords_marker.stat.exists) and (auto_passwords_result.rc == 0)
+
+    # If auto failed (rc!=0), fall back to file-realm temp superuser (7.x way)
+    - name: Set flag if auto failed with bootstrap error
+      set_fact:
+        auto_bootstrap_failed: "{{ (not passwords_marker.stat.exists) and (auto_passwords_result.rc != 0) }}"
+      when: not passwords_marker.stat.exists
+
+    # -------- Path B: fallback via file realm temp superuser --------
+    - name: Enable temporary file realm (dot-notation to avoid YAML key collisions)
+      blockinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        marker: "# {mark} ANSIBLE TEMP FILE REALM"
+        block: |
+          xpack.security.authc.realms.file.file1.order: 0
+          xpack.security.authc.realms.native.native1.order: 1
+      become: yes
+      when: auto_bootstrap_failed | default(false)
+
+    - name: Restart ES for file realm enablement
+      systemd:
+        name: elasticsearch
+        state: restarted
+        enabled: yes
+      become: yes
+      when: auto_bootstrap_failed | default(false)
+
+    - name: Wait for HTTPS after enabling file realm
+      uri:
+        url: "{{ es_api_url_https }}"
+        method: GET
+        validate_certs: no
+        status_code: [200, 401]
+      register: es_https_ready_filerealm
+      until: es_https_ready_filerealm.status in [200, 401]
+      retries: 30
+      delay: 5
+      when: auto_bootstrap_failed | default(false)
+
+    - name: Generate temp admin password
+      set_fact:
+        temp_admin_password: "{{ lookup('password', '/dev/null', chars='ascii_letters,digits', length=20) }}"
+      when: auto_bootstrap_failed | default(false)
+
+    - name: Remove existing temp admin user if exists
+      shell: /usr/share/elasticsearch/bin/elasticsearch-users userdel es_temp_admin
+      become: yes
+      ignore_errors: yes
+      when: auto_bootstrap_failed | default(false)
+
+    - name: Create temp superuser in file realm (fresh)
+      shell: >
+        /usr/share/elasticsearch/bin/elasticsearch-users useradd es_temp_admin
+        -p "{{ temp_admin_password }}" -r superuser
+      register: temp_admin_create
+      become: yes
+      when: auto_bootstrap_failed | default(false)
+
+    - name: Restart ES after user creation to reload file realm
+      systemd:
+        name: elasticsearch
+        state: restarted
+      become: yes
+      when: auto_bootstrap_failed | default(false) and (temp_admin_create is defined and temp_admin_create.rc == 0)
+
+    - name: Wait for ES after user creation restart
+      uri:
+        url: "{{ es_api_url_https }}/"
+        validate_certs: no
+        status_code: [200, 401]
+      register: es_ready_after_user
+      until: es_ready_after_user.status in [200, 401]
+      retries: 30
+      delay: 5
+      when: auto_bootstrap_failed | default(false) and (temp_admin_create is defined and temp_admin_create.rc == 0)
+
+    - name: Mark temp admin created
+      file:
+        path: /etc/elasticsearch/.es_temp_admin_created
+        state: touch
+      become: yes
+      when: auto_bootstrap_failed | default(false) and (temp_admin_create is defined and temp_admin_create.rc == 0)
+
+    # Decide which credentials to use for password changes
+    # Compute whether 'auto' succeeded on THIS run (safe on reruns)
+    - name: Decide if 'auto' succeeded
+      set_fact:
+        auto_ok: "{{ (auto_passwords_result is defined)
+                    and ('rc' in auto_passwords_result)
+                    and (auto_passwords_result.rc | int == 0) }}"
+
+    # Decide which credentials to use for password changes (fresh, fallback, or rerun)
+    - name: Determine credentials for password change
+      set_fact:
+        password_change_user: >-
+          {{
+            'elastic' if auto_ok
+            else ('es_temp_admin' if (temp_admin_password is defined) else 'elastic')
+          }}
+        password_change_pass: >-
+          {{
+            es_password_map.elastic if auto_ok
+            else (temp_admin_password if (temp_admin_password is defined) else elastic_user_password)
+          }}
+
+    # Change all passwords to known values (use whichever creds we have)
+    - name: Set 'elastic' superuser password to known value (REST)
+      uri:
+        url: "{{ es_api_url_https }}/_security/user/elastic/_password"
+        method: POST
+        user: "{{ password_change_user }}"
+        password: "{{ password_change_pass }}"
+        force_basic_auth: yes
+        validate_certs: no
+        headers: { Content-Type: "application/json" }
+        body_format: json
+        body: { password: "{{ elastic_user_password }}" }
+        status_code: 200
+
+    - name: Use new elastic password for subsequent changes
+      set_fact:
+        elastic_current_password: "{{ elastic_user_password }}"
+
+    - name: Set 'kibana_system' password
+      uri:
+        url: "{{ es_api_url_https }}/_security/user/kibana_system/_password"
+        method: POST
+        user: "elastic"
+        password: "{{ elastic_current_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        headers: { Content-Type: "application/json" }
+        body_format: json
+        body: { password: "{{ kibana_user_password }}" }
+        status_code: 200
+
+    - name: Set 'logstash_system' password
+      uri:
+        url: "{{ es_api_url_https }}/_security/user/logstash_system/_password"
+        method: POST
+        user: "elastic"
+        password: "{{ elastic_current_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        headers: { Content-Type: "application/json" }
+        body_format: json
+        body: { password: "{{ logstash_user_password }}" }
+        status_code: 200
+
+    - name: Set 'beats_system' password
+      uri:
+        url: "{{ es_api_url_https }}/_security/user/beats_system/_password"
+        method: POST
+        user: "elastic"
+        password: "{{ elastic_current_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        headers: { Content-Type: "application/json" }
+        body_format: json
+        body: { password: "{{ beats_user_password }}" }
+        status_code: 200
+
+    - name: Set 'apm_system' password
+      uri:
+        url: "{{ es_api_url_https }}/_security/user/apm_system/_password"
+        method: POST
+        user: "elastic"
+        password: "{{ elastic_current_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        headers: { Content-Type: "application/json" }
+        body_format: json
+        body: { password: "{{ apm_user_password }}" }
+        status_code: 200
+
+    - name: Set 'remote_monitoring_user' password
+      uri:
+        url: "{{ es_api_url_https }}/_security/user/remote_monitoring_user/_password"
+        method: POST
+        user: "elastic"
+        password: "{{ elastic_current_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        headers: { Content-Type: "application/json" }
+        body_format: json
+        body: { password: "{{ remote_monitoring_user_password }}" }
+        status_code: 200
+
+    - name: Create beats_writer role for Winlogbeat
+      uri:
+        url: "{{ es_api_url_https }}/_security/role/beats_writer"
+        method: PUT
+        user: "elastic"
+        password: "{{ elastic_current_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        headers: { Content-Type: "application/json" }
+        body_format: json
+        body:
+          cluster: ["monitor", "manage_index_templates", "manage_ilm"]
+          indices:
+            - names: ["winlogbeat-*", "filebeat-*", "metricbeat-*", "heartbeat-*", "auditbeat-*"]
+              privileges: ["write", "create", "create_index", "manage", "manage_ilm"]
+        status_code: [200, 201]
+
+    - name: Create winlogbeat_writer user
+      uri:
+        url: "{{ es_api_url_https }}/_security/user/winlogbeat_writer"
+        method: PUT
+        user: "elastic"
+        password: "{{ elastic_current_password }}"
+        force_basic_auth: yes
+        validate_certs: no
+        headers: { Content-Type: "application/json" }
+        body_format: json
+        body:
+          password: "{{ winlogbeat_writer_password }}"
+          roles: ["beats_writer"]
+          full_name: "Winlogbeat Writer User"
+          email: "winlogbeat@workshop.local"
+        status_code: [200, 201]
+
+    - name: Mark passwords as set
+      file:
+        path: /etc/elasticsearch/.passwords_set
+        state: touch
+      become: yes
+
+    # Cleanup temp file realm if we used it
+    - name: Remove temp admin (file realm)
+      command: /usr/share/elasticsearch/bin/elasticsearch-users userdel es_temp_admin
+      become: yes
+      ignore_errors: true
+      when: auto_bootstrap_failed | default(false)
+
+    - name: Remove temporary file realm config
+      blockinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        marker: "# {mark} ANSIBLE TEMP FILE REALM"
+        state: absent
+      become: yes
+      when: auto_bootstrap_failed | default(false)
+
+    - name: Restart ES after removing temp file realm
+      systemd:
+        name: elasticsearch
+        state: restarted
+        enabled: yes
+      become: yes
+      when: auto_bootstrap_failed | default(false)
+
+  when: certs_exist_and_secure or (es_secured_status_after_config is defined and es_secured_status_after_config.status in [200, 401])
+
+# --- Kibana ---
+- name: Install Kibana
+  apt:
+    name: kibana
+    state: present
+  become: yes
+
+
+- name: Configure Kibana with TLS and Authentication
+  template:
+    src: kibana.yml.j2
+    dest: /etc/kibana/kibana.yml
+  notify: Restart kibana
+  become: yes
+
+- name: Reload systemd daemon before starting Kibana
+  systemd:
+    daemon_reload: yes
+  become: yes
+
+- name: Start and enable Kibana service
+  systemd:
+    name: kibana
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Install Logstash
+  apt:
+    name: logstash
+    state: present
+  become: yes
+
+- name: Create /etc/sysconfig directory
+  file:
+    path: /etc/sysconfig
+    state: directory
+    mode: '0755'
+  become: yes
+
+- name: Ensure /etc/logstash directory has correct permissions for logstash user
+  file:
+    path: /etc/logstash
+    state: directory
+    owner: logstash
+    group: logstash
+    mode: '0755'
+  become: yes
+
+- name: Remove existing Logstash environment file to prevent duplicates
+  file:
+    path: /etc/sysconfig/logstash
+    state: absent
+  become: yes
+
+- name: Configure Logstash keystore password environment
+  copy:
+    content: "LOGSTASH_KEYSTORE_PASS=password123"
+    dest: /etc/sysconfig/logstash
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Add keystore password to default Logstash environment file
+  lineinfile:
+    path: /etc/default/logstash
+    line: "LOGSTASH_KEYSTORE_PASS=password123"
+    regexp: "^LOGSTASH_KEYSTORE_PASS="
+    create: yes
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+
+- name: Validate environment file has single keystore password entry
+  shell: |
+    # Check for exactly one LOGSTASH_KEYSTORE_PASS entry
+    if [ $(grep -c "LOGSTASH_KEYSTORE_PASS" /etc/sysconfig/logstash) -ne 1 ]; then
+      echo "ERROR: Multiple or missing LOGSTASH_KEYSTORE_PASS entries found"
+      exit 1
+    fi
+    # Check for empty password value
+    if grep -q "LOGSTASH_KEYSTORE_PASS=$" /etc/sysconfig/logstash; then
+      echo "ERROR: Empty LOGSTASH_KEYSTORE_PASS value found"
+      exit 1
+    fi
+    # Check for malformed entries with newlines or special characters
+    if grep -q "LOGSTASH_KEYSTORE_PASS=.*\\\\n" /etc/sysconfig/logstash; then
+      echo "ERROR: LOGSTASH_KEYSTORE_PASS contains literal \\n characters"
+      exit 1
+    fi
+    # Verify file has exactly one line
+    if [ $(wc -l < /etc/sysconfig/logstash) -ne 1 ]; then
+      echo "ERROR: Environment file should contain exactly one line"
+      exit 1
+    fi
+    echo "Environment file validation passed"
+  become: yes
+  register: env_validation_result
+
+- name: Display environment file validation result
+  debug:
+    msg: "{{ env_validation_result.stdout }}"
+
+- name: Create Logstash keystore
+  shell: >
+    /usr/share/logstash/bin/logstash-keystore --path.settings /etc/logstash create
+  args:
+    creates: /etc/logstash/logstash.keystore
+  environment:
+    LOGSTASH_KEYSTORE_PASS: 'password123'
+  become: yes
+  register: logstash_keystore_create_result
+
+- name: Check if LS_PASSWORD exists in keystore
+  shell: >
+    /usr/share/logstash/bin/logstash-keystore --path.settings /etc/logstash list | grep -q "ls_password"
+  environment:
+    LOGSTASH_KEYSTORE_PASS: 'password123'
+  become: yes
+  register: ls_password_check
+  failed_when: false
+  changed_when: false
+
+- name: Add LS_PASSWORD to Logstash keystore
+  shell: >
+    echo "{{ winlogbeat_writer_password }}" | /usr/share/logstash/bin/logstash-keystore --path.settings /etc/logstash add LS_PASSWORD --stdin
+  environment:
+    LOGSTASH_KEYSTORE_PASS: 'password123'
+  become: yes
+  when: ls_password_check.rc != 0
+  register: logstash_keystore_add_result
+  changed_when: logstash_keystore_add_result.rc == 0
+  failed_when: logstash_keystore_add_result.rc != 0
+
+- name: Ensure CA certificate directory has correct permissions for ELK stack
+  file:
+    path: /etc/elasticsearch/certs
+    state: directory
+    owner: elasticsearch
+    group: elk-certs
+    mode: '0750'
+  become: yes
+
+- name: Ensure CA certificate is accessible to all ELK components
+  file:
+    path: /etc/elasticsearch/certs/ca.crt
+    owner: root
+    group: elk-certs
+    mode: '0644'
+  become: yes
+
+- name: Create Logstash pipeline configuration for Winlogbeat
+  template:
+    src: winlogbeat-pipeline.conf.j2
+    dest: /etc/logstash/conf.d/winlogbeat-pipeline.conf
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+  notify: Restart Logstash
+
+- name: Ensure Logstash pipeline dir exists
+  file:
+    path: /etc/logstash/conf.d
+    state: directory
+    owner: logstash
+    group: logstash
+    mode: '0755'
+  become: yes
+
+
+- name: Configure Logstash main settings
+  template:
+    src: logstash.yml.j2
+    dest: /etc/logstash/logstash.yml
+  notify: Restart logstash
+  become: yes
+
+- name: Create systemd override directory for Logstash
+  file:
+    path: /etc/systemd/system/logstash.service.d
+    state: directory
+    mode: '0755'
+  become: yes
+
+- name: Configure Logstash systemd environment
+  copy:
+    content: |
+      [Service]
+      EnvironmentFile=/etc/sysconfig/logstash
+    dest: /etc/systemd/system/logstash.service.d/override.conf
+    mode: '0644'
+  become: yes
+  notify: Restart logstash
+
+- name: Reload systemd daemon
+  systemd:
+    daemon_reload: yes
+  become: yes
+
+- name: Start and enable Logstash service
+  systemd:
+    name: logstash
+    state: started
+    enabled: yes
+  become: yes
+
+# --- Firewall ---
+- name: Allow necessary ports in firewall
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: [5601, 9200, 5044]
+  notify: Reload ufw
+  become: yes

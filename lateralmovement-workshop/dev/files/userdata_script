@@ -1,0 +1,39 @@
+<powershell>
+# Set Administrator password
+$admin = [adsi]("WinNT://./administrator, user")
+$admin.PSBase.Invoke("SetPassword", "AnsibleAutomation123!")
+
+# --- BEGIN ROBUST WINRM SETUP & FIREWALL DISABLING ---
+
+# 1. Ensure WinRM service is running and configured
+# Set startup type to Automatic and start the service
+Set-Service -Name WinRM -StartupType Automatic -Force
+Start-Service -Name WinRM -Force
+
+# 2. Configure WinRM Listener for HTTP on port 5985
+# This creates the default listener if one doesn't exist, or ensures it's configured for HTTP.
+# -Force allows it to run without prompting.
+winrm quickconfig -q -Force
+
+# 3. Allow Basic Authentication (needed for Ansible NTLM transport over HTTP)
+# This explicitly allows Basic auth, which is typically used by Ansible in lab setups.
+winrm set winrm/config/service/Auth @{Basic="true"}
+
+# 4. Allow Unencrypted Traffic (common for lab environments with HTTP WinRM)
+# Allows WinRM traffic over HTTP without encryption (NOT for production!)
+winrm set winrm/config/service @{AllowUnencrypted="true"}
+winrm set winrm/config/client @{AllowUnencrypted="true"} # Also for client side if connecting from Windows clients
+
+# 5. Disable Windows Firewall Profiles Completely (Most aggressive for lab connectivity)
+# This ensures nothing is blocking it. In a real environment, you'd add specific rules.
+Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False -Confirm:$false
+
+# 6. Optional: Increase WinRM MaxEnvelopeSize and MaxMemoryPerShell
+# Helps prevent "memory limit" errors with larger Ansible modules or command output
+winrm set winrm/config @{MaxEnvelopeSizeKb="1536"} # Default 150KB, increase to 1.5MB
+winrm set winrm/config/winrs @{MaxMemoryPerShellMB="1024"} # Default 150MB, increase to 1GB
+
+# --- END ROBUST WINRM SETUP & FIREWALL DISABLING ---
+
+Write-Host "WinRM setup and Firewall disabled successfully during userdata execution." | Out-File C:\winrm_setup_log.txt -Append
+</powershell>

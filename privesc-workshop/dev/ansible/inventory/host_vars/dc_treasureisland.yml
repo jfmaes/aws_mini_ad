@@ -1,0 +1,6 @@
+#variables for the DC role
+dc_hostname: treasure-dc01
+netbios_name: treasure 
+dns_dom_name: treasureisland.lab
+safemode_pass: Sup3rS3cr3tP@ssw0rd!
+populate_ad_data_file: "{{ playbook_dir }}/datasources/ad_data_treasureisland.lab.yml"

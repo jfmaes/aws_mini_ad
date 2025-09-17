@@ -1,0 +1,10 @@
+domains:
+  - name: "sandbox.pwnzone.lab"
+    dns_servers:
+      - "10.0.10.10"
+  - name: "pwnzone.lab"
+    dns_servers:
+      - "10.0.100.10"
+  - name: "treasureisland.lab"
+    dns_servers:
+      - "10.0.200.10"

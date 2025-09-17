@@ -1,0 +1,257 @@
+- name: disable defenses
+  hosts: all
+  roles:
+    - disabledefence
+
+- name: Create Local Admin Account on Windows Hosts
+  hosts: all
+  tasks:
+    - name: Ensure local admin account exists
+      win_user:
+        name: breakglass
+        password: 'RescueMe1234!'
+        state: present
+        groups:
+          - Administrators
+        password_never_expires: yes
+        account_disabled: no
+
+- name: provision pwnzone
+  hosts: dc_pwnzone
+  roles:
+    - domain_controller
+  tasks:
+    - name: Set fact for domain_joined
+      set_fact:
+        domain_joined: true  
+
+- name: set DNS on dc_sandbox to point to parent domain controller
+  hosts: dc_sandbox
+  tasks:
+    - name: set DNS to parent domain controller before child domain creation
+      win_dns_client:
+        adapter_names: '*'
+        ipv4_addresses:
+          - "{{ hostvars[ 'dc_pwnzone' ]['ansible_host'] }}"
+
+- name: provision the sandbox domain controller child trust
+  hosts: dc_sandbox
+  roles:
+    - childtrust
+  tasks:
+    - name: Set fact for domain_joined
+      set_fact:
+        domain_joined: true
+
+- name: set the DNS server to include both domain controllers
+  hosts: dc_sandbox,dc_pwnzone
+  tasks:
+    - name: set the DNS server to both domain controllers
+      win_dns_client:
+        adapter_names: '*'
+        ipv4_addresses:
+          - "{{ hostvars[ 'dc_pwnzone' ]['ansible_host'] }}"
+          - "{{ hostvars[ 'dc_sandbox' ]['ansible_host'] }}"
+
+
+- name: set the DNS servers to establish tree-root trust
+  hosts: dc_pwnzone,dc_treasureisland
+  tasks:
+    - name: set the DNS server to the main domain controller
+      win_dns_client:
+        adapter_names: '*'
+        ipv4_addresses:
+          - "{{ hostvars[ 'dc_pwnzone' ]['ansible_host'] }}"
+          - "{{ hostvars[ 'dc_treasureisland' ]['ansible_host'] }}"
+
+- name: setup tree-root-trust
+  hosts: dc_treasureisland
+  roles:
+    - treeroot_trust
+  tasks:
+    - name: Set fact for domain_joined
+      set_fact:
+        domain_joined: true
+    - name: Debug tree-root
+      debug:
+        var: tree_root_domain_result
+
+- name: hard reboot of dc_treasureisland
+  hosts: dc_treasureisland
+  tasks:
+    - name: Reboot
+      win_reboot:
+    - name: Wait for machines to come back online
+      wait_for_connection:
+        delay: 10
+        timeout: 300
+
+- name: setup forwarders between trusted domains
+  hosts: domaincontrollers
+  roles:
+    - dnsforwarder
+
+
+- name: enable TGT delegation for parent-child abuse on the sandbox domain controller - this can fail, while the trust is still building so we retry a few times
+  hosts: dc_sandbox
+  tasks:
+    - name: enable TGT delegation
+      win_command: netdom.exe trust sandbox.pwnzone.lab /domain:pwnzone.lab /EnableTGTDelegation:Yes
+      retries: 2
+      delay: 30
+
+
+
+
+- name: enable TGT delegation for parent-child abuse on the pwnzone domain controller - this can fail, while the trust is still building so we retry a few times
+  hosts: dc_pwnzone
+  tasks:
+    - name: enable TGT delegation
+      win_command: netdom.exe trust pwnzone.lab /domain:sandbox.pwnzone.lab /EnableTGTDelegation:Yes
+      retries: 2
+      delay: 30
+
+
+- name: enable TGT delegation for parent-child abuse on the sandbox domain controller - this can fail, while the trust is still building so we retry a few times
+  hosts: dc_pwnzone
+  tasks:
+    - name: enable TGT delegation
+      win_command: netdom.exe trust pwnzone.lab /domain:treasureisland.lab /EnableTGTDelegation:Yes
+      retries: 2
+      delay: 30
+
+
+
+
+- name: enable TGT delegation for parent-child abuse on the pwnzone domain controller - this can fail, while the trust is still building so we retry a few times
+  hosts: dc_treasureisland
+  tasks:
+    - name: enable TGT delegation
+      win_command: netdom.exe trust treasureisland.lab /domain:pwnzone.lab /EnableTGTDelegation:Yes
+      retries: 2
+      delay: 30
+
+
+
+- name: set the final DNS adapter settings now that all zones are trusted and up and running
+  hosts: domaincontrollers
+  tasks:
+    - name: set the DNS servers 
+      win_dns_client:
+        adapter_names: '*'
+        ipv4_addresses:
+          - "{{ ansible_ssh_host }}"
+          - "1.1.1.1"
+
+
+- name: reboot all DCs to apply deleg settings
+  hosts: domaincontrollers
+  tasks:
+    - name: Reboot
+      win_reboot:
+    - name: Wait for machines to come back online
+      wait_for_connection:
+        delay: 10
+        timeout: 300 
+
+- name: domain join hosts to the sandbox domain
+  hosts: ws01
+  roles:
+    - sandbox_domain_hosts 
+
+- name: populate ad
+  hosts: domaincontrollers
+  roles:
+    - adpopulation
+    #some users wont be able to get added because of weak passwords even though pw gen is random.
+  ignore_errors: true
+
+- name: make sure computer account passwords never expire because snapshots
+  hosts: all
+  tasks:
+    - name: set computer to never expire
+      win_regedit:
+        path: HKLM:\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters
+        name: DisablePasswordChange 
+        data: 1
+        type: dword
+
+#vuln logic goes here
+- name: create entrypoint service account 
+  hosts: dc_sandbox
+  tasks:
+    - name: add new service account to the domain administrator group 
+      microsoft.ad.user:
+        identity: svc_entrypoint
+        password: ChangeMe1234!
+        spn:
+          set:
+            - HTTP/ws01.sandbox.pwnzone.lab
+        state: present
+        groups:
+          set: Domain Admins
+        password_never_expires: true
+  ignore_errors: true
+
+- name: plant fakespool server
+  hosts: domaincontrollers
+  roles:
+    - fakespooler
+
+# --- LAT MOVE WORKSHOP MODS START HERE ---
+
+# 1. Install Sysmon on all Windows hosts
+- name: Install and Configure Sysmon on Windows hosts
+  hosts: windows
+  roles:
+    - sysmon
+
+# 2. Setup the ELK Stack on the SOC machine
+# Passwords are sourced globally from dev/ansible/group_vars/all.yml
+- name: Setup ELK Stack on SOC machine
+  hosts: linux_servers
+  roles:
+    - soc_elk
+
+# 3. Install and configure Winlogbeat on all Windows hosts
+# This role relies on the SOC machine having generated its CA certificate first.
+- name: Install and Configure Winlogbeat on Windows hosts
+  hosts: windows
+  vars:
+    soc_machine_ip: "{{ hostvars['soc']['ansible_host'] }}"
+    # elastic_user_password is sourced globally from group_vars/all.yml for Winlogbeat setup command
+    elastic_user_password: "{{ elastic_user_password }}"
+  roles:
+    - winlogbeat
+
+# 4. Configure Kibana index patterns and dashboards for log analysis
+- name: Configure Kibana for Windows Event Log Analysis
+  hosts: linux_servers
+  roles:
+    - kibana_config
+
+# 5. Install Wireshark on all Windows hosts for network analysis
+- name: Install Wireshark on Windows hosts
+  hosts: windows
+  roles:
+    - wireshark
+
+# 6. Create a scheduled task to load a privileged user's hash into memory on WS01
+- name: Schedule task for privileged user hash on workstation
+  hosts: ws01
+  vars:
+    # Ensure this user is a Domain Admin in sandbox.pwnzone.lab for the PtH/OpTH demos
+    privileged_username: "adm_asnyder"
+    # IMPORTANT: Replace with the actual password for adm_asnyder from your ad_data_sandbox.pwnzone.lab.yml
+    privileged_password: "5u8p19T1jVqkW6K"
+    privileged_domain: "sandbox.pwnzone.lab"
+  roles:
+    - privileged_user_task
+
+# 7. Enable PowerShell Script Block Logging (FINAL STEP - may break WinRM connectivity)
+- name: Enable PowerShell Script Block Logging on Windows hosts
+  hosts: windows
+  roles:
+    - powershell_logging
+
+# --- LAT MOVE WORKSHOP MODS END HERE ---

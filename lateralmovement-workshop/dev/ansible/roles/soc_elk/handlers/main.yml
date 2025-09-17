@@ -1,0 +1,23 @@
+---
+- name: Restart elasticsearch
+  systemd:
+    name: elasticsearch
+    state: restarted
+  become: yes
+
+- name: Restart kibana
+  systemd:
+    name: kibana
+    state: restarted
+  become: yes
+
+- name: Restart Logstash
+  systemd:
+    name: logstash
+    state: restarted
+  become: yes
+
+- name: Reload ufw
+  ufw:
+    state: reloaded
+  become: yes

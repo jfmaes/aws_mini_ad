@@ -1,0 +1,37 @@
+- name: Set DC as DNS
+  win_dns_client:
+    adapter_names: '*'
+    dns_servers: "{{ hostvars[ 'dc_sandbox' ]['ansible_host'] }}"
+
+- name: "Change the hostname"
+  win_hostname:
+    name: "{{ inventory_hostname }}"
+  register: result
+
+- name: "Reboot the system"
+  win_reboot:
+  when: result.changed
+
+- name: "Add system to domain {{ domain_fqdn }}"
+  microsoft.ad.membership:
+    dns_domain_name: "{{ domain_fqdn }}"
+    hostname: "{{ inventory_hostname }}"
+    domain_admin_user: "administrator@{{ domain_fqdn }}"
+    domain_admin_password: "{{ ansible_pass }}"
+    state: domain
+  register: domain_state
+  retries: 10
+  delay: 30
+  until: domain_state is success
+
+
+- name: Reboot system
+  win_reboot:
+  when: domain_state.reboot_required
+
+- name: Add Domain Users group to Remote Desktop users group
+  win_group_membership:
+    name: Remote Desktop Users
+    members:
+      - "{{ domain_netbios }}\\Domain Users"
+    state: present

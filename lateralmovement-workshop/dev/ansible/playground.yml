@@ -1,0 +1,4 @@
+- name: Deploy Updated Sysmon Config Only
+  hosts: windows
+  roles:
+    - sysmon

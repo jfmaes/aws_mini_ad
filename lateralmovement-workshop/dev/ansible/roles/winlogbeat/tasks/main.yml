@@ -1,0 +1,155 @@
+# Download Winlogbeat if not already present
+- name: Create temporary download directory
+  ansible.windows.win_file:
+    path: C:\temp
+    state: directory
+
+- name: Download Winlogbeat zip
+  ansible.windows.win_get_url:
+    url: "{{ winlogbeat_download_url }}"
+    dest: "C:\\{{ winlogbeat_zip_name }}.zip"
+    force: no
+  register: download_result
+  retries: 3
+  delay: 10
+  until: download_result is succeeded
+
+# Ensure unzip happened at least once
+- name: Unzip Winlogbeat
+  community.windows.win_unzip:
+    src: "C:\\{{ winlogbeat_zip_name }}.zip"
+    dest: "{{ winlogbeat_dir }}"
+    creates: "{{ winlogbeat_extracted }}"
+  register: unzip_result
+
+- name: Ensure winlogbeat.exe is in {{ winlogbeat_dir }}
+  ansible.windows.win_powershell:
+    script: |
+      $src = "{{ winlogbeat_extracted }}"
+      $dst = "{{ winlogbeat_dir }}"
+      $exe = Join-Path $dst "winlogbeat.exe"
+
+      if (-not (Test-Path $exe)) {
+        if (Test-Path $src) {
+          Get-ChildItem -Path $src -Force | Move-Item -Destination $dst -Force
+          Remove-Item -Path $src -Recurse -Force
+          "moved"
+        } else {
+          "nothing_to_move"
+        }
+      } else {
+        "already_in_place"
+      }
+  register: move_result
+  changed_when: move_result.output is defined and ('moved' in (move_result.output | join(' ')))
+  failed_when: move_result.error is defined and (move_result.error | length) > 0
+
+- name: Install Winlogbeat service if missing
+  ansible.windows.win_powershell:
+    script: |
+      Set-Location "{{ winlogbeat_dir }}"
+      $svc = Get-Service -Name "Winlogbeat" -ErrorAction SilentlyContinue
+      if ($null -eq $svc) {
+        powershell -ExecutionPolicy Bypass -File ".\install-service-winlogbeat.ps1"
+        "installed"
+      } else {
+        "present"
+      }
+  register: install_result
+  changed_when: install_result.output is defined and ('installed' in (install_result.output | join(' ')))
+  failed_when: install_result.error is defined and (install_result.error | length) > 0
+
+- name: Create certs directory on Windows host
+  ansible.windows.win_file:
+    path: C:\Program Files\Winlogbeat\certs
+    state: directory
+
+- name: Verify CA certificate exists on SOC machine
+  ansible.builtin.stat:
+    path: /etc/elasticsearch/certs/ca.crt
+  delegate_to: soc
+  register: soc_ca_cert_check
+  failed_when: not soc_ca_cert_check.stat.exists
+
+- name: Fetch CA certificate from SOC machine
+  fetch:
+    src: /etc/elasticsearch/certs/ca.crt
+    dest: /tmp/ca.crt
+    flat: yes
+  delegate_to: soc
+  run_once: true
+
+- name: Copy CA certificate to Windows host
+  ansible.windows.win_copy:
+    src: /tmp/ca.crt
+    dest: C:\Program Files\Winlogbeat\certs\ca.crt
+
+- name: Copy Winlogbeat configuration
+  ansible.windows.win_template:
+    src: winlogbeat.yml.j2
+    dest: C:\Program Files\Winlogbeat\winlogbeat.yml
+  notify: Restart Winlogbeat
+
+- name: Ensure no SSL configuration remnants in Winlogbeat config
+  community.windows.win_lineinfile:
+    path: C:\Program Files\Winlogbeat\winlogbeat.yml
+    regexp: "{{ item }}"
+    state: absent
+  loop:
+    - 'ssl\.enabled:'
+    - 'ssl\.verification_mode:'
+    - 'ssl\.certificate_authorities:'
+    - '    - "C:\\.*\.crt"'
+  notify: Restart Winlogbeat
+
+- name: Validate Winlogbeat config
+  ansible.windows.win_command: >
+    powershell -NoProfile -ExecutionPolicy Bypass
+    -Command "Set-Location '{{ winlogbeat_dir }}'; .\winlogbeat.exe test config -c .\winlogbeat.yml -e"
+  register: config_test_result
+  failed_when: config_test_result.rc != 0
+
+- name: Test Winlogbeat output connectivity (Logstash)
+  ansible.windows.win_command: >
+    powershell -NoProfile -ExecutionPolicy Bypass
+    -Command "Set-Location '{{ winlogbeat_dir }}'; .\winlogbeat.exe test output -c .\winlogbeat.yml"
+  register: output_test_result
+  failed_when: output_test_result.rc != 0
+  ignore_errors: true
+
+- name: Ensure Winlogbeat service is running
+  ansible.windows.win_service:
+    name: Winlogbeat
+    state: started
+    start_mode: auto
+  register: winlogbeat_service_result
+
+- name: Wait for Winlogbeat to initialize
+  ansible.windows.win_wait_for:
+    timeout: 30
+    delay: 2
+  when: winlogbeat_service_result.changed
+
+- name: Verify Winlogbeat service is running
+  ansible.windows.win_service_info:
+    name: Winlogbeat
+  register: winlogbeat_service_info
+  failed_when: winlogbeat_service_info.services[0].state != "started"
+
+- name: Check Winlogbeat log for successful startup
+  ansible.windows.win_powershell:
+    script: |
+      $logPath = "C:\Program Files\Winlogbeat\logs\winlogbeat"
+      $latest = Get-ChildItem -Path $logPath -Filter "*.ndjson" -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+      if (-not $latest) { return "no_log_files_found" }
+      $ok = Get-Content -Path $latest.FullName -Tail 200 |
+            ForEach-Object { $_ | ConvertFrom-Json } |
+            Where-Object { $_.message -match "Winlogbeat start running" -or $_.message -match "State changed to RUNNING" }
+      if ($ok) { "winlogbeat_started_successfully" } else { "no_startup_confirmation_found" }
+  register: winlogbeat_startup_check
+  ignore_errors: true
+
+- name: Display Winlogbeat startup status
+  ansible.builtin.debug:
+    msg: "Winlogbeat startup check: {{ winlogbeat_startup_check.output | default(['startup_check_failed']) | join(' ') }}"

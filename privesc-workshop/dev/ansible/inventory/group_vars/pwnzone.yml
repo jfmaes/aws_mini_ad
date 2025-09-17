@@ -1,0 +1,3 @@
+domain_name: pwnzone.lab
+domain_short_name: pwnzone
+domain_admin_user: "{{ domain_short_name }}\\Administrator"

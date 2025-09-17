@@ -1,0 +1,6 @@
+#variables for the DC role
+dc_hostname: pwnzone-dc01
+netbios_name: pwnzone
+dns_dom_name: pwnzone.lab
+safemode_pass: SuperSecretSafeModePasswordForTheWin!?
+populate_ad_data_file: "{{ playbook_dir }}/datasources/ad_data_pwnzone.lab.yml"

@@ -1,0 +1,32 @@
+# elasticsearch.yml.j2
+cluster.name: "elk-workshop"
+node.name: "{{ ansible_hostname }}"
+
+path.data: /var/lib/elasticsearch
+path.logs: /var/log/elasticsearch
+
+# Listen on both the primary interface and loopback; advertise the real IP
+network.bind_host: ["_site_", "_local_"]
+network.publish_host: "{{ es_host }}"
+http.port: 9200
+
+# Single-node dev/lab mode
+discovery.type: single-node
+
+# --- Security & TLS ---
+xpack.security.enabled: true
+
+# Transport (node-to-node) TLS
+xpack.security.transport.ssl.enabled: true
+xpack.security.transport.ssl.verification_mode: certificate
+xpack.security.transport.ssl.keystore.path: /etc/elasticsearch/certs/elastic-stack-certs.p12
+xpack.security.transport.ssl.keystore.password: "{{ elastic_certs_password }}"
+xpack.security.transport.ssl.truststore.path: /etc/elasticsearch/certs/elastic-stack-certs.p12
+xpack.security.transport.ssl.truststore.password: "{{ elastic_certs_password }}"
+
+# HTTP (client) TLS
+xpack.security.http.ssl.enabled: true
+xpack.security.http.ssl.keystore.path: /etc/elasticsearch/certs/elastic-stack-certs.p12
+xpack.security.http.ssl.keystore.password: "{{ elastic_certs_password }}"
+xpack.security.http.ssl.truststore.path: /etc/elasticsearch/certs/elastic-stack-certs.p12
+xpack.security.http.ssl.truststore.password: "{{ elastic_certs_password }}"

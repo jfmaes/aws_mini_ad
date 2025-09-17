@@ -1,0 +1,200 @@
+---
+- name: Get system timezone
+  command: timedatectl show --property=Timezone --value
+  register: system_timezone
+  delegate_to: "{{ inventory_hostname }}"
+  tags:
+    - kibana_config
+    - timezone
+
+- name: Wait for Kibana to be ready
+  uri:
+    url: "{{ kibana_url }}/api/status"
+    method: GET
+    user: "elastic"
+    password: "{{ elastic_user_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    status_code: 200
+  register: kibana_status
+  until: kibana_status.status == 200
+  retries: "{{ kibana_ready_retries }}"
+  delay: "{{ kibana_ready_delay }}"
+  tags:
+    - kibana_config
+    - kibana_health_check
+
+- name: Create Kibana index patterns
+  uri:
+    url: "{{ kibana_url }}/api/saved_objects/index-pattern/{{ item.name }}"
+    method: POST
+    user: "elastic"
+    password: "{{ elastic_user_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    headers:
+      Content-Type: "application/json"
+      kbn-xsrf: "true"
+    body_format: json
+    body:
+      attributes:
+        title: "{{ item.title }}"
+        timeFieldName: "{{ item.time_field }}"
+    status_code: [200, 409]
+  loop: "{{ kibana_index_patterns }}"
+  tags:
+    - kibana_config
+    - index_patterns
+  register: index_pattern_results
+
+- name: Set default index pattern
+  uri:
+    url: "{{ kibana_url }}/api/kibana/settings/defaultIndex"
+    method: POST
+    user: "elastic"
+    password: "{{ elastic_user_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    headers:
+      Content-Type: "application/json"
+      kbn-xsrf: "true"
+    body_format: json
+    body:
+      value: "{{ item.name }}"
+    status_code: [200, 400]
+  loop: "{{ kibana_index_patterns }}"
+  when: item.set_as_default | default(false)
+  ignore_errors: yes
+  tags:
+    - kibana_config
+    - index_patterns
+
+- name: Delete existing saved searches to recreate them properly
+  uri:
+    url: "{{ kibana_url }}/api/saved_objects/search/{{ item.id }}"
+    method: DELETE
+    user: "elastic"
+    password: "{{ elastic_user_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    headers:
+      kbn-xsrf: "true"
+    status_code: [200, 404]
+  loop: "{{ kibana_saved_searches }}"
+  ignore_errors: yes
+  tags:
+    - kibana_config
+    - saved_searches
+
+- name: Create Kibana saved searches with proper references
+  uri:
+    url: "{{ kibana_url }}/api/saved_objects/search/{{ item.id }}"
+    method: POST
+    user: "elastic"
+    password: "{{ elastic_user_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    headers:
+      Content-Type: "application/json"
+      kbn-xsrf: "true"
+    body_format: json
+    body:
+      attributes:
+        title: "{{ item.title }}"
+        description: "{{ item.description }}"
+        hits: 0
+        columns: "{{ item.columns }}"
+        sort: [["@timestamp", "desc"]]
+        version: 1
+        kibanaSavedObjectMeta:
+          searchSourceJSON: "{{ {'index': item.index_pattern, 'query': {'query': item.query, 'language': 'kuery'}, 'filter': [], 'highlightAll': true, 'version': true} | to_json }}"
+      references:
+        - id: "{{ item.index_pattern }}"
+          name: "kibanaSavedObjectMeta.searchSourceJSON.index"
+          type: "index-pattern"
+    status_code: [200, 409]
+  loop: "{{ kibana_saved_searches }}"
+  tags:
+    - kibana_config
+    - saved_searches
+
+- name: Create Windows Security Events Dashboard
+  uri:
+    url: "{{ kibana_url }}/api/saved_objects/dashboard/{{ item.id }}"
+    method: POST
+    user: "elastic"
+    password: "{{ elastic_user_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    headers:
+      Content-Type: "application/json"
+      kbn-xsrf: "true"
+    body_format: json
+    body:
+      attributes:
+        title: "{{ item.title }}"
+        description: "{{ item.description }}"
+        panelsJSON: "[]"
+        optionsJSON: "{\"useMargins\":true,\"syncColors\":false,\"hidePanelTitles\":false}"
+        version: 1
+        kibanaSavedObjectMeta:
+          searchSourceJSON: "{\"query\":{\"query\":\"\",\"language\":\"kuery\"},\"filter\":[]}"
+    status_code: [200, 409]
+  loop: "{{ kibana_dashboards }}"
+  tags:
+    - kibana_config
+    - dashboards
+
+- name: Configure Kibana timezone to match system timezone
+  uri:
+    url: "{{ kibana_url }}/api/saved_objects/config/7.17.29"
+    method: PUT
+    user: "elastic"
+    password: "{{ elastic_user_password }}"
+    force_basic_auth: yes
+    validate_certs: no
+    headers:
+      Content-Type: "application/json"
+      kbn-xsrf: "true"
+    body_format: json
+    body:
+      attributes:
+        buildNum: 47815
+        defaultIndex: "winlogbeat-*"
+        "dateFormat:tz": "{{ system_timezone.stdout }}"
+    status_code: [200, 201]
+  tags:
+    - kibana_config
+    - timezone
+
+- name: Display Kibana access information
+  debug:
+    msg: |
+      Kibana Configuration Complete!
+
+      Access Kibana at: {{ kibana_url }}
+      Username: elastic
+      Password: {{ elastic_user_password }}
+      Timezone configured: {{ system_timezone.stdout }}
+
+      Available searches:
+      {% for search in kibana_saved_searches %}
+      - {{ search.title }}: {{ search.description }}
+      {% endfor %}
+
+      Go to Discover tab and select one of these saved searches to start analyzing logs.
+
+      Useful Sysmon Event IDs:
+      - Event ID 1: Process Creation
+      - Event ID 3: Network Connection
+      - Event ID 11: File Create
+      - Event ID 13: Registry Value Set
+
+      Useful Security Event IDs:
+      - Event ID 4624: Successful Logon
+      - Event ID 4625: Failed Logon
+      - Event ID 4648: Logon with Explicit Credentials
+      - Event ID 4672: Special Privileges Assigned
+  tags:
+    - kibana_config
+    - info

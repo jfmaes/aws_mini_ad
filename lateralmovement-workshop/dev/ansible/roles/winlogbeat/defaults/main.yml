@@ -1,0 +1,10 @@
+winlogbeat_version: "7.17.18"
+winlogbeat_dir: "C:\\Program Files\\Winlogbeat"
+winlogbeat_zip_name: "winlogbeat-{{ winlogbeat_version }}-windows-x86_64"
+winlogbeat_extracted: "{{ winlogbeat_dir }}\\{{ winlogbeat_zip_name }}"
+winlogbeat_exe: "{{ winlogbeat_dir }}\\winlogbeat.exe"
+winlogbeat_download_url: "https://artifacts.elastic.co/downloads/beats/winlogbeat/{{ winlogbeat_zip_name }}.zip"
+
+# Output configuration - ensure consistent non-SSL setup
+winlogbeat_output_type: "logstash"
+winlogbeat_ssl_enabled: false

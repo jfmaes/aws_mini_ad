@@ -1,0 +1,55 @@
+- name: Change the hostname to the correct DC hostname
+  win_hostname:
+    name: "{{ dc_hostname }}"
+  register: result
+
+- name: Reboot
+  win_reboot:
+  when: result.reboot_required
+
+- name: Install the domain controller
+  win_feature:
+    name: AD-Domain-Services
+    include_management_tools: yes
+    include_sub_features: yes
+    state: present
+  register: result
+
+- name: "setting up the domain"
+  microsoft.ad.domain:
+    dns_domain_name: "{{ dns_dom_name }}"
+    domain_netbios_name: "{{ netbios_name }}"
+    safe_mode_password: "{{ safemode_pass }}"
+  register: ad
+
+- name: "debug"
+  debug:
+    var: ad
+
+- name: "ensure A record is present"
+  ansible.windows.win_dns_record:
+    name: "{{ dc_hostname }}"
+    zone: "{{ dns_dom_name }}"
+    type: A
+    value: "{{ ansible_ssh_host }}"
+    state: present
+
+- name: set the DNS server to the main domain controller and fallback to 1.1.1.1
+  win_dns_client:
+    adapter_names: '*'
+    ipv4_addresses:
+      - "{{ ansible_ssh_host }}"
+      - 1.1.1.1
+
+- name: Ensure WinRM starts when the system has settled and is ready to work reliably
+  win_service:
+    name: WinRM
+    start_mode: delayed
+
+- name: Reboot
+  win_reboot:
+  
+- name: Wait for machine to come back online
+  wait_for_connection:
+    delay: 10  # Wait 10 seconds before starting to check
+    timeout: 300  # Wait up to 5 minutes for the machine to become reachable

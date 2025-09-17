@@ -1,0 +1,22 @@
+---
+# Workstations role defaults
+# Configuration for domain-joined workstation setup
+
+# Domain join settings
+workstation_domain_join_enabled: true
+workstation_reboot_after_join: true
+workstation_join_timeout: 300
+
+# Local administrator settings
+workstation_local_admin_enabled: true
+workstation_local_admin_username: "breakglass"
+workstation_local_admin_password: "RescueMe1234!"
+
+# Windows Update settings
+workstation_disable_windows_updates: true
+workstation_disable_automatic_restart: true
+
+# Security settings
+workstation_disable_defender: true
+workstation_disable_firewall: true
+workstation_enable_rdp: true

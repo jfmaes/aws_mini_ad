@@ -1,0 +1,23 @@
+- name: rename host
+  win_hostname:
+      name: "{{ hostname }}"
+  register: result
+
+- name: Reboot
+  win_reboot:
+  when: result.reboot_required
+
+
+- name: Create a child domain sandbox.pwnzone.lab - WARNING THIS TASK TAKES A LONG TIME - go chill a bit
+  microsoft.ad.domain_child:
+    dns_domain_name: "{{ domain }}"
+    domain_admin_user: "administrator@{{ parent_domain }}"
+    domain_admin_password: "{{ parent_domain_password }}"
+    safe_mode_password: "{{ safemode_password }}"
+    install_dns: true
+    reboot: true
+  register: child_domain_result
+
+- name: child domain result Debug
+  debug:
+    var: child_domain_result
